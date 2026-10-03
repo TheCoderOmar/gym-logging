@@ -1,0 +1,47 @@
+<%- include('../partials/head') %>
+<div class="page page-narrow" id="logger" data-workout="<%= w.id %>" data-finished="<%= w.finished_at ? 1 : 0 %>">
+  <div class="log-head">
+    <label class="sr-only" for="log-title">Workout name</label>
+    <input class="log-title" id="log-title" type="text" value="<%= w.name %>" maxlength="80">
+    <div class="log-meta">
+      <% if (w.finished_at) { %>
+        <span>Editing a finished workout from <%= fmt.date(w.started_at) %></span>
+      <% } else { %>
+        <span class="clock" id="clock" data-start="<%= w.started_at %>">0:00</span>
+        <span>started <%= fmt.time(w.started_at) %></span>
+      <% } %>
+      <span class="save-state" id="save-state" role="status"></span>
+    </div>
+  </div>
+
+  <div class="log-list" id="lifts"><p class="muted">Loading…</p></div>
+
+  <button type="button" class="btn add-lift" id="add-lift" style="margin-top:18px"><%- icon('plus') %> Add exercise</button>
+
+  <div class="field" style="margin-top:24px">
+    <label for="log-notes">Notes</label>
+    <textarea id="log-notes" placeholder="How did it feel? Anything to change next time?"><%= w.notes || '' %></textarea>
+  </div>
+
+  <div class="log-actions">
+    <% if (w.finished_at) { %>
+      <a class="btn btn-go btn-lg" href="/workouts/<%= w.id %>">Done editing</a>
+    <% } else { %>
+      <button type="button" class="btn btn-go btn-lg" id="finish"><%- icon('check') %> Finish workout</button>
+    <% } %>
+    <form method="post" action="/workouts/<%= w.id %>/delete" onsubmit="return confirm('<%= w.finished_at ? 'Delete this workout and all its sets?' : 'Discard this workout? Everything logged in it will be deleted.' %>')">
+      <button class="btn btn-danger btn-lg"><%- icon('trash') %> <%= w.finished_at ? 'Delete workout' : 'Discard' %></button>
+    </form>
+  </div>
+</div>
+
+<div class="rest-timer" id="rest" hidden role="timer" aria-live="off">
+  <%- icon('timer') %>
+  <span class="t" id="rest-t">1:30</span>
+  <button type="button" data-rest="-15">−15s</button>
+  <button type="button" data-rest="15">+15s</button>
+  <button type="button" data-rest="skip">Skip</button>
+</div>
+
+<%- include('../partials/picker') %>
+<%- include('../partials/foot') %>
