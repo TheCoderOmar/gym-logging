@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title><%= typeof title !== 'undefined' && title ? title + ' – Gym Log' : 'Gym Log' %></title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='15' fill='%23d62e2e'/><circle cx='16' cy='16' r='3.2' fill='%23eef0f2'/></svg>">
+  <link rel="preload" href="/fonts/saira-semi-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/app.css">
+  <script>try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body>
+<div class="shell">
+  <nav class="rail" aria-label="Main">
+    <a class="brand" href="/"><%- brandMark %> Gym Log</a>
+    <a class="nav-link" href="/" <%- active('/') ? 'aria-current="page"' : '' %>><%- icon('home') %> Home</a>
+    <a class="nav-link" href="/workouts" <%- active('/workouts') ? 'aria-current="page"' : '' %>><%- icon('history') %> History</a>
+    <a class="nav-link" href="/exercises" <%- active('/exercises') ? 'aria-current="page"' : '' %>><%- icon('library') %> Exercises</a>
+    <a class="nav-link" href="/routines" <%- active('/routines') ? 'aria-current="page"' : '' %>><%- icon('routines') %> Routines</a>
+    <a class="nav-link" href="/progress" <%- active('/progress') ? 'aria-current="page"' : '' %>><%- icon('progress') %> Progress</a>
+    <a class="nav-link nav-settings" href="/settings" <%- active('/settings') ? 'aria-current="page"' : '' %>><%- icon('settings') %> Settings</a>
+    <% if (live && path !== '/' && !path.startsWith('/workouts/' + live.id + '/log')) { %>
+      <a class="rail-live" href="/workouts/<%= live.id %>/log">Back to workout<small><%= live.name %> · started <%= fmt.time(live.started_at) %></small></a>
+    <% } %>
+  </nav>
+  <main id="main">
+    <div class="mobile-top">
+      <a class="brand" href="/"><%- brandMark %> Gym Log</a>
+      <a class="icon-btn" href="/settings" aria-label="Settings"><%- icon('settings') %></a>
+    </div>
+    <% if (flash) { %><div class="flash" role="status"><%= flash %></div><% } %>

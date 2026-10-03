@@ -446,9 +446,11 @@ function createRepo(db) {
     );
   }
 
-  // New set copies the previous set in this exercise so you just tap ✓.
+  // New set copies the last filled-in set of this exercise so you just tap ✓.
   function addSet(weId) {
-    const prev = get('SELECT * FROM sets WHERE workout_exercise_id = ? ORDER BY set_number DESC LIMIT 1', weId);
+    const prev =
+      get('SELECT * FROM sets WHERE workout_exercise_id = ? AND (weight IS NOT NULL OR reps IS NOT NULL) ORDER BY set_number DESC LIMIT 1', weId) ||
+      get('SELECT * FROM sets WHERE workout_exercise_id = ? ORDER BY set_number DESC LIMIT 1', weId);
     const we = get('SELECT exercise_id FROM workout_exercises WHERE id = ?', weId);
     if (!we) throw new Error('Not found');
     const id = insertSet(weId, prev ? { weight: prev.weight, unit: prev.unit, reps: prev.reps } : { unit: lastUnitFor(we.exercise_id) });
