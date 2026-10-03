@@ -1,0 +1,103 @@
+<%- include('partials/head') %>
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>Progress</h1>
+      <p class="muted">How your lifts are moving. Weights shown in <%= unit %>; sets logged in the other unit are converted.</p>
+    </div>
+  </div>
+
+  <% if (!exercises.length) { %>
+    <div class="empty">
+      <h3>No lifts to chart yet</h3>
+      <p>Finish a workout with a few ticked-off sets and your charts and personal records appear here.</p>
+      <div class="btn-row"><a class="btn btn-go" href="/">Start a workout</a></div>
+    </div>
+  <% } else { %>
+    <form class="progress-pick" method="get" action="/progress">
+      <div class="field">
+        <label for="exercise">Exercise</label>
+        <select id="exercise" name="exercise" onchange="this.form.submit()">
+          <% for (const e of exercises) { %>
+            <option value="<%= e.id %>" <%= selected && e.id === selected.id ? 'selected' : '' %>><%= fmt.cap(e.name) %> (<%= e.sessions %>)</option>
+          <% } %>
+        </select>
+      </div>
+      <noscript><button class="btn">Show</button></noscript>
+      <a class="btn btn-quiet" href="/exercises/<%= selected.id %>">Exercise page</a>
+    </form>
+
+    <% if (prs) { %>
+      <div class="pr-strip">
+        <div><span>Heaviest</span><b class="num"><%= prs.heaviest.weight %> <%= unit %></b><span>× <%= prs.heaviest.reps %> on <%= fmt.date(prs.heaviest.date) %></span></div>
+        <div><span>Best estimated 1RM</span><b class="num"><%= prs.bestE1rm.e1rm %> <%= unit %></b><span><%= prs.bestE1rm.weight %> × <%= prs.bestE1rm.reps %> on <%= fmt.date(prs.bestE1rm.date) %></span></div>
+        <div><span>Most reps</span><b class="num"><%= prs.mostReps.reps %></b><span>at <%= prs.mostReps.weight %> <%= unit %> on <%= fmt.date(prs.mostReps.date) %></span></div>
+      </div>
+    <% } %>
+
+    <section class="section" style="margin-top:24px">
+      <div class="chart-tabs" role="group" aria-label="Measure">
+        <button type="button" data-metric="e1rm" aria-pressed="true">Estimated 1RM</button>
+        <button type="button" data-metric="topWeight" aria-pressed="false">Top set</button>
+        <button type="button" data-metric="volume" aria-pressed="false">Volume</button>
+      </div>
+      <div class="chart-box">
+        <canvas id="lift-chart" role="img" aria-label="<%= selected.name %> over time"></canvas>
+      </div>
+      <% if (sessions.length === 1) { %><p class="muted small" style="margin-top:8px">One session so far. The line appears after your next one.</p><% } %>
+      <details style="margin-top:12px">
+        <summary class="muted small" style="cursor:pointer">Show as table</summary>
+        <table class="rm-table" style="margin-top:8px">
+          <thead><tr><th>Date</th><th>Top set (<%= unit %>)</th><th>Est. 1RM (<%= unit %>)</th><th>Volume (<%= unit %>)</th><th>Sets</th></tr></thead>
+          <tbody>
+            <% for (const s of [...sessions].reverse()) { %>
+              <tr><td><a href="/workouts/<%= s.workout_id %>"><%= fmt.date(s.date) %></a></td><td><%= s.topWeight %></td><td><%= s.e1rm %></td><td><%= fmt.num(s.volume) %></td><td><%= s.sets %></td></tr>
+            <% } %>
+          </tbody>
+        </table>
+      </details>
+    </section>
+
+    <% if (prs) { %>
+      <section class="section">
+        <h2 style="margin-bottom:12px">Best weight for each rep count</h2>
+        <table class="rm-table" style="max-width:560px">
+          <thead><tr><th>Reps</th><th>Weight</th><th>Est. 1RM</th><th>Date</th></tr></thead>
+          <tbody>
+            <% for (const [reps, r] of Object.entries(prs.repMaxes).sort((a, b) => a[0] - b[0])) { %>
+              <tr><td><%= reps %></td><td class="num"><%= r.weight %> <%= unit %></td><td class="num muted"><%= reps == 1 ? r.weight : Math.round(r.weight * (1 + reps / 30) * 10) / 10 %> <%= unit %></td><td><a href="/workouts/<%= r.workout_id %>"><%= fmt.date(r.date) %></a></td></tr>
+            <% } %>
+          </tbody>
+        </table>
+      </section>
+    <% } %>
+  <% } %>
+
+  <div class="two-col section">
+    <section>
+      <h2 style="margin-bottom:12px">Weekly volume</h2>
+      <div class="chart-box sm"><canvas id="week-chart" role="img" aria-label="Volume lifted per week, last 12 weeks"></canvas></div>
+    </section>
+    <section>
+      <h2 style="margin-bottom:12px">Sets by body part, last 30 days</h2>
+      <% if (!bodyParts.length) { %>
+        <p class="muted">Nothing logged in the last 30 days.</p>
+      <% } else { const max = Math.max(...bodyParts.map((b) => b.sets)); %>
+        <ul class="bp-bars">
+          <% for (const b of bodyParts) { %>
+            <li><span><%= b.body_part %></span><span class="track"><span class="fill" style="width:<%= Math.max(3, (b.sets / max) * 100) %>%"></span></span><span class="num"><%= b.sets %></span></li>
+          <% } %>
+        </ul>
+      <% } %>
+    </section>
+  </div>
+</div>
+<script>
+  window.CHART_DATA = {
+    kind: 'progress',
+    unit: <%- JSON.stringify(unit) %>,
+    sessions: <%- JSON.stringify(sessions) %>,
+    weeks: <%- JSON.stringify(weeks) %>,
+  };
+</script>
+<%- include('partials/foot') %>
