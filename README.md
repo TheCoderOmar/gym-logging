@@ -10,7 +10,19 @@ npm run seed   # loads data/exercises.json + images/ + videos/ into db/gym.sqlit
 npm start      # http://localhost:3000
 ```
 
-`npm start` seeds automatically if the database is empty.
+`npm start` seeds automatically if the database is empty. Needs Node 22.13+ (uses the built-in `node:sqlite`).
+
+To log from your phone on the same Wi-Fi, start it with `HOST=0.0.0.0 npm start` (PowerShell: `$env:HOST='0.0.0.0'; npm start`) and open `http://<your-PC-IP>:3000`.
+
+## Pages
+
+- **Home** — start an empty workout or one from a routine, this week at a glance, recent workouts.
+- **History** — every finished workout with sets, volume and duration; edit, delete or save as a routine.
+- **Exercises** — search and filter the library, see GIF + instructions + your records; add your own.
+- **Routines** — build reusable workouts with target sets/reps/rest. Four starter routines are included.
+- **Logger** — tick off sets as you go; last session's numbers pre-filled, per-exercise kg/lb, plate calculator, rest timer. Autosaves.
+- **Progress** — estimated 1RM, top set and volume per exercise, rep maxes, weekly volume.
+- **Settings** — display unit, bar weight, theme, database backup.
 
 ## Data
 
