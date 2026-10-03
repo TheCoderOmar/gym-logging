@@ -1,0 +1,44 @@
+<%- include('../partials/head') %>
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>Routines</h1>
+      <p class="muted">Reusable workouts. Start one and its exercises and sets are ready to fill in.</p>
+    </div>
+    <a class="btn btn-go" href="/routines/new"><%- icon('plus') %> New routine</a>
+  </div>
+
+  <% if (!routines.length) { %>
+    <div class="empty">
+      <h3>No routines yet</h3>
+      <p>Build one from the exercise library, or finish a workout and save it as a routine.</p>
+      <div class="btn-row"><a class="btn btn-go" href="/routines/new">Create a routine</a></div>
+    </div>
+  <% } else { %>
+    <div class="routine-list">
+      <% for (const r of routines) { %>
+        <article class="routine">
+          <div class="routine-top">
+            <h2><a href="/routines/<%= r.id %>/edit"><%= r.name %></a></h2>
+            <span class="muted small"><%= r.last_done ? fmt.relDay(r.last_done) : 'Not done yet' %></span>
+          </div>
+          <% if (r.notes) { %><p class="muted small"><%= r.notes %></p><% } %>
+          <ol>
+            <% for (const ex of r.exercises) { %>
+              <li><span><%= ex.name %></span><span class="num"><%= ex.target_sets %>×</span></li>
+            <% } %>
+            <% if (!r.exercises.length) { %><li class="muted">No exercises yet</li><% } %>
+          </ol>
+          <div class="btn-row">
+            <form method="post" action="/workouts/start">
+              <button class="btn btn-go btn-sm" name="routine_id" value="<%= r.id %>" <%= live || !r.exercises.length ? 'disabled' : '' %> title="<%= live ? 'Finish your current workout first' : '' %>"><%- icon('play') %> Start</button>
+            </form>
+            <a class="btn btn-sm" href="/routines/<%= r.id %>/edit"><%- icon('edit') %> Edit</a>
+            <form method="post" action="/routines/<%= r.id %>/duplicate"><button class="btn btn-sm btn-quiet">Duplicate</button></form>
+          </div>
+        </article>
+      <% } %>
+    </div>
+  <% } %>
+</div>
+<%- include('../partials/foot') %>

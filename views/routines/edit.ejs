@@ -1,0 +1,38 @@
+<%- include('../partials/head') %>
+<div class="page page-narrow">
+  <p style="margin-bottom:14px"><a class="btn btn-sm btn-quiet" href="/routines">All routines</a></p>
+  <div class="page-head"><h1><%= routine.id ? 'Edit routine' : 'New routine' %></h1></div>
+
+  <div class="error-box" id="builder-error" role="alert" hidden></div>
+
+  <form class="form-grid" id="builder" data-id="<%= routine.id || '' %>">
+    <div class="field">
+      <label for="r-name">Name</label>
+      <input id="r-name" type="text" value="<%= routine.name %>" required maxlength="80" placeholder="e.g. Upper body, Monday">
+    </div>
+    <div class="field">
+      <label for="r-notes">Notes <small>optional</small></label>
+      <input id="r-notes" type="text" value="<%= routine.notes || '' %>" placeholder="e.g. Add 2.5 kg when all sets hit the top of the range">
+    </div>
+
+    <div>
+      <div class="section-head" style="margin-bottom:10px"><h2>Exercises</h2><span class="muted small" id="r-count"></span></div>
+      <ul class="builder-list" id="r-list"></ul>
+      <button type="button" class="btn add-lift" id="r-add" style="margin-top:12px"><%- icon('plus') %> Add exercise</button>
+    </div>
+
+    <div class="btn-row" style="margin-top:8px">
+      <button class="btn btn-go btn-lg" type="submit">Save routine</button>
+      <a class="btn btn-quiet btn-lg" href="/routines">Cancel</a>
+    </div>
+  </form>
+
+  <% if (routine.id) { %>
+    <form method="post" action="/routines/<%= routine.id %>/delete" style="margin-top:40px" onsubmit="return confirm('Delete this routine? Workouts you did with it are kept.')">
+      <button class="btn btn-danger"><%- icon('trash') %> Delete routine</button>
+    </form>
+  <% } %>
+</div>
+<script>window.ROUTINE = <%- JSON.stringify(routine.exercises.map((e) => ({ exercise_id: e.exercise_id, name: e.name, target: e.target, equipment: e.equipment, has_image: e.has_image, target_sets: e.target_sets, target_reps: e.target_reps, rest_seconds: e.rest_seconds }))).replace(/</g, '\\u003c') %>;</script>
+<%- include('../partials/picker') %>
+<%- include('../partials/foot') %>
