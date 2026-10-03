@@ -1,0 +1,63 @@
+<%- include('../partials/head') %>
+<div class="page page-narrow">
+  <p style="margin-bottom:14px"><a class="btn btn-sm btn-quiet" href="/workouts">History</a></p>
+  <div class="page-head">
+    <div>
+      <h1><%= w.name %></h1>
+      <p class="muted"><%= fmt.weekday(w.started_at) %> <%= fmt.date(w.started_at, { year: 'numeric' }) %>, <%= fmt.time(w.started_at) %>–<%= fmt.time(w.finished_at) %><%= w.routine_name ? ' · from ' + w.routine_name : '' %></p>
+    </div>
+    <a class="btn" href="/workouts/<%= w.id %>/log"><%- icon('edit') %> Edit sets</a>
+  </div>
+
+  <div class="detail-figures">
+    <div><b class="num"><%= fmt.duration(w.started_at, w.finished_at) %></b><span>duration</span></div>
+    <div><b class="num"><%= w.exercises.length %></b><span>exercises</span></div>
+    <div><b class="num"><%= totals.sets %></b><span>working sets</span></div>
+    <div><b class="num"><%= fmt.num(totals.volume) %> <%= unit %></b><span>volume</span></div>
+  </div>
+
+  <% if (w.notes) { %><p class="notes" style="margin-bottom:28px"><%= w.notes %></p><% } %>
+
+  <div class="detail-lifts">
+    <% for (const we of w.exercises) { %>
+      <section class="detail-lift">
+        <h3><a href="/exercises/<%= we.exercise_id %>"><%= we.name %></a><span class="muted small num"><%= fmt.num(we.volume) %> <%= unit %></span></h3>
+        <table>
+          <thead><tr><th>Set</th><th>Weight</th><th>Reps</th><th><span class="sr-only">Notes</span></th></tr></thead>
+          <tbody>
+            <% let n = 0; for (const s of we.sets) { if (!s.is_warmup) n++; %>
+              <tr class="<%= s.is_warmup ? 'warm' : '' %>">
+                <td class="num"><%= s.is_warmup ? 'W' : n %></td>
+                <td class="num"><%= s.weight == null ? 'Bodyweight' : fmt.weight(s.weight, s.unit, s.unit) + ' ' + s.unit %><% if (s.weight != null && s.unit !== unit) { %> <span class="muted small">(<%= fmt.weight(s.weight, s.unit, unit) %> <%= unit %>)</span><% } %></td>
+                <td class="num"><%= s.reps ?? '—' %></td>
+                <td><% if (we.prIds.has(s.id)) { %><span class="pr">Heaviest ever</span><% } else if (!s.done) { %><span class="muted small">not done</span><% } %></td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </section>
+    <% } %>
+    <% if (!w.exercises.length) { %><div class="empty"><p>No sets were logged in this workout.</p></div><% } %>
+  </div>
+
+  <div class="log-actions">
+    <form method="post" action="/workouts/<%= w.id %>/to-routine"><button class="btn"><%- icon('routines') %> Save as routine</button></form>
+    <form method="post" action="/workouts/<%= w.id %>/delete" onsubmit="return confirm('Delete this workout and all its sets? This can’t be undone.')">
+      <button class="btn btn-danger"><%- icon('trash') %> Delete workout</button>
+    </form>
+  </div>
+
+  <details class="edit-meta">
+    <summary>Edit name, notes and times</summary>
+    <form class="form-grid" method="post" action="/workouts/<%= w.id %>/update">
+      <div class="field"><label for="name">Name</label><input id="name" type="text" name="name" value="<%= w.name %>" required></div>
+      <div class="two">
+        <div class="field"><label for="started_at">Started</label><input id="started_at" type="datetime-local" name="started_at" value="<%= fmt.localInput(w.started_at) %>"></div>
+        <div class="field"><label for="finished_at">Finished</label><input id="finished_at" type="datetime-local" name="finished_at" value="<%= fmt.localInput(w.finished_at) %>"></div>
+      </div>
+      <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes"><%= w.notes || '' %></textarea></div>
+      <div class="btn-row"><button class="btn btn-go">Save workout</button></div>
+    </form>
+  </details>
+</div>
+<%- include('../partials/foot') %>

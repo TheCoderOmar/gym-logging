@@ -1,0 +1,26 @@
+<%- include('../partials/head') %>
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>History</h1>
+      <p class="muted"><%= total ? fmt.num(total) + (total === 1 ? ' workout' : ' workouts') + ' logged' : 'Your finished workouts.' %></p>
+    </div>
+  </div>
+  <% if (!rows.length) { %>
+    <div class="empty">
+      <h3>Nothing logged yet</h3>
+      <p>Start a workout from Home. When you finish it, it shows up here.</p>
+      <div class="btn-row"><a class="btn btn-go" href="/">Go to Home</a></div>
+    </div>
+  <% } else { %>
+    <%- include('../partials/workout-rows', { rows }) %>
+    <% if (pages > 1) { %>
+      <nav class="pager" aria-label="Pages">
+        <% if (page > 1) { %><a class="btn" href="/workouts?page=<%= page - 1 %>">Newer</a><% } else { %><span></span><% } %>
+        <span class="muted">Page <%= page %> of <%= pages %></span>
+        <% if (page < pages) { %><a class="btn" href="/workouts?page=<%= page + 1 %>">Older</a><% } else { %><span></span><% } %>
+      </nav>
+    <% } %>
+  <% } %>
+</div>
+<%- include('../partials/foot') %>

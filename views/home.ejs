@@ -1,0 +1,67 @@
+<%- include('partials/head') %>
+<%
+  const h = new Date().getHours();
+  const greeting = h < 5 ? 'Late session?' : h < 12 ? 'Morning.' : h < 17 ? 'Afternoon.' : 'Evening.';
+%>
+<div class="page">
+  <div class="home-hero">
+    <section class="start-panel" aria-labelledby="start-title">
+      <h1 id="start-title"><%= live ? 'You’re mid-workout.' : greeting %></h1>
+      <% if (live) { %>
+        <p class="lede"><%= live.name %> started at <%= fmt.time(live.started_at) %>. Pick up where you left off.</p>
+        <div class="btn-row"><a class="btn btn-go btn-lg" href="/workouts/<%= live.id %>/log"><%- icon('play') %> Back to workout</a></div>
+      <% } else { %>
+        <p class="lede"><%= totals.workouts ? 'What are you training today?' : 'Start with a routine below, or an empty workout and add exercises as you go.' %></p>
+        <form method="post" action="/workouts/start">
+          <button class="btn btn-go btn-lg"><%- icon('plus') %> Start empty workout</button>
+        </form>
+        <% if (routines.length) { %>
+          <form class="routine-starts" method="post" action="/workouts/start">
+            <% for (const r of routines) { %>
+              <button class="routine-start" name="routine_id" value="<%= r.id %>">
+                <span>
+                  <strong><%= r.name %></strong><br>
+                  <span><%= r.exercises.length %> exercises · <%= r.total_sets %> sets<%= r.last_done ? ' · last done ' + fmt.relDay(r.last_done).toLowerCase() : '' %></span>
+                </span>
+                <%- icon('play') %>
+              </button>
+            <% } %>
+          </form>
+        <% } %>
+      <% } %>
+    </section>
+
+    <section class="week" aria-labelledby="week-title">
+      <h2 id="week-title">This week</h2>
+      <div class="week-days">
+        <% for (const d of days) { %>
+          <div class="week-day <%= d.trained ? 'trained' : '' %> <%= d.today ? 'today' : '' %>">
+            <span class="dot" aria-hidden="true"></span>
+            <span><%= d.label %><span class="sr-only"><%= d.trained ? ' trained' : '' %></span></span>
+          </div>
+        <% } %>
+      </div>
+      <div class="week-stats">
+        <div><b class="num"><%= stats.workouts %></b><span><%= stats.workouts === 1 ? 'workout' : 'workouts' %></span></div>
+        <div><b class="num"><%= stats.sets %></b><span>working sets</span></div>
+        <div><b class="num"><%= fmt.num(stats.volume) %></b><span><%= unit %> lifted</span></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="section" aria-labelledby="recent-title">
+    <div class="section-head">
+      <h2 id="recent-title">Recent workouts</h2>
+      <% if (recent.length) { %><a href="/workouts">All history</a><% } %>
+    </div>
+    <% if (!recent.length) { %>
+      <div class="empty">
+        <h3>No workouts yet</h3>
+        <p>Finished workouts land here with their sets, volume and duration.</p>
+      </div>
+    <% } else { %>
+      <%- include('partials/workout-rows', { rows: recent }) %>
+    <% } %>
+  </section>
+</div>
+<%- include('partials/foot') %>
