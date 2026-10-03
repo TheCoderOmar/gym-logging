@@ -1,0 +1,22 @@
+<dialog class="picker" id="picker" aria-labelledby="picker-title">
+  <div class="picker-head">
+    <div class="top">
+      <h2 id="picker-title">Add exercise</h2>
+      <button type="button" class="btn btn-sm btn-quiet" data-close aria-label="Close"><%- icon('x') %></button>
+    </div>
+    <label class="sr-only" for="picker-q">Search exercises</label>
+    <input id="picker-q" type="search" placeholder="Search 1,300+ exercises" autocomplete="off">
+    <div class="filters2">
+      <select id="picker-body" aria-label="Body part">
+        <option value="">Any body part</option>
+        <% for (const o of options.body_parts) { %><option value="<%= o %>"><%= fmt.cap(o) %></option><% } %>
+      </select>
+      <select id="picker-equip" aria-label="Equipment">
+        <option value="">Any equipment</option>
+        <% for (const o of options.equipment) { %><option value="<%= o %>"><%= fmt.cap(o) %></option><% } %>
+      </select>
+    </div>
+  </div>
+  <ul class="picker-results" id="picker-results" aria-live="polite"></ul>
+  <div class="picker-foot" id="picker-foot"></div>
+</dialog>

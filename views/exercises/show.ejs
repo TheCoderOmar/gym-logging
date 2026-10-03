@@ -1,0 +1,72 @@
+<%- include('../partials/head') %>
+<div class="page">
+  <p style="margin-bottom:14px"><a class="btn btn-sm btn-quiet" href="/exercises">All exercises</a></p>
+  <div class="ex-detail">
+    <div>
+      <div class="ex-media">
+        <% if (ex.has_gif) { %>
+          <img src="/media/<%= ex.id %>/gif" alt="Animation of <%= ex.name %>" width="300" height="300">
+        <% } else if (ex.has_image) { %>
+          <img src="/media/<%= ex.id %>/image" alt="<%= ex.name %>" width="300" height="300">
+        <% } else { %>
+          <span class="ex-thumb" style="border:0"><span class="ph"><%= ex.name.charAt(0).toUpperCase() %></span></span>
+        <% } %>
+      </div>
+      <% if (!ex.is_custom) { %><p class="attribution">Media © Gym visual</p><% } %>
+    </div>
+
+    <div>
+      <div class="btn-row" style="justify-content:space-between;align-items:flex-start">
+        <h1 class="ex-title"><%= ex.name %></h1>
+        <% if (ex.is_custom) { %><a class="btn btn-sm" href="/exercises/<%= ex.id %>/edit"><%- icon('edit') %> Edit</a><% } %>
+      </div>
+      <dl class="facts">
+        <dt>Target</dt><dd><%= ex.target %></dd>
+        <dt>Body part</dt><dd><%= ex.body_part %></dd>
+        <dt>Equipment</dt><dd><%= ex.equipment %></dd>
+        <% if (ex.secondary_muscles.length) { %><dt>Also works</dt><dd><%= ex.secondary_muscles.join(', ') %></dd><% } %>
+      </dl>
+      <% if (live) { %>
+        <form method="post" action="/workouts/<%= live.id %>/add-exercise" style="margin-top:22px">
+          <input type="hidden" name="exercise_id" value="<%= ex.id %>">
+          <button class="btn btn-go"><%- icon('plus') %> Add to <%= live.name %></button>
+        </form>
+      <% } %>
+
+      <% const steps = (ex.instruction_steps && ex.instruction_steps.en) || []; %>
+      <% if (steps.length) { %>
+        <section class="section" style="margin-top:32px">
+          <h2 style="margin-bottom:12px">How to do it</h2>
+          <ol class="steps"><% for (const s of steps) { %><li><%= s %></li><% } %></ol>
+        </section>
+      <% } %>
+    </div>
+  </div>
+
+  <section class="section">
+    <div class="section-head"><h2>Your numbers</h2><% if (sessions.length) { %><a href="/progress?exercise=<%= ex.id %>">Full progress</a><% } %></div>
+    <% if (!prs) { %>
+      <div class="empty"><p>You haven’t logged this yet. Your best sets and history show up here after your first session.</p></div>
+    <% } else { %>
+      <div class="pr-strip">
+        <div><span>Heaviest</span><b class="num"><%= prs.heaviest.weight %> <%= unit %></b><span>× <%= prs.heaviest.reps %> on <%= fmt.date(prs.heaviest.date) %></span></div>
+        <div><span>Best estimated 1RM</span><b class="num"><%= prs.bestE1rm.e1rm %> <%= unit %></b><span><%= prs.bestE1rm.weight %> × <%= prs.bestE1rm.reps %> on <%= fmt.date(prs.bestE1rm.date) %></span></div>
+        <div><span>Most reps</span><b class="num"><%= prs.mostReps.reps %></b><span>at <%= prs.mostReps.weight %> <%= unit %> on <%= fmt.date(prs.mostReps.date) %></span></div>
+      </div>
+      <% if (sessions.length > 1) { %>
+        <div class="chart-box sm" style="margin-top:16px"><canvas id="ex-chart" aria-label="Estimated 1RM over time"></canvas></div>
+        <script>window.CHART_DATA = { kind: 'exercise-mini', unit: <%- JSON.stringify(unit) %>, sessions: <%- JSON.stringify(sessions) %> };</script>
+      <% } %>
+      <h3 style="margin:26px 0 8px">Recent sessions</h3>
+      <ul class="session-list">
+        <% for (const r of recent) { %>
+          <li>
+            <a href="/workouts/<%= r.workout_id %>"><%= fmt.relDay(r.date) %></a>
+            <span class="sets num"><% for (const s of r.sets) { %><span class="<%= s.is_warmup ? 'warm' : '' %>"><%= fmt.set(s) %></span><% } %></span>
+          </li>
+        <% } %>
+      </ul>
+    <% } %>
+  </section>
+</div>
+<%- include('../partials/foot') %>

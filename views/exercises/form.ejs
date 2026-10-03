@@ -1,0 +1,67 @@
+<%- include('../partials/head') %>
+<% const editing = !!ex.id; %>
+<div class="page page-narrow">
+  <div class="page-head">
+    <div>
+      <h1><%= editing ? 'Edit exercise' : 'Add an exercise' %></h1>
+      <p class="muted"><%= editing ? 'Changes apply everywhere this exercise is used.' : 'For anything the library doesn’t have. It works like every other exercise once saved.' %></p>
+    </div>
+  </div>
+  <% if (error) { %><div class="error-box" role="alert"><%= error %></div><% } %>
+
+  <form class="form-grid" method="post" action="<%= editing ? '/exercises/' + ex.id : '/exercises' %>" enctype="multipart/form-data">
+    <div class="field">
+      <label for="name">Name</label>
+      <input id="name" type="text" name="name" value="<%= ex.name || '' %>" required maxlength="120" placeholder="e.g. Landmine press" autofocus>
+    </div>
+    <div class="two">
+      <div class="field">
+        <label for="body_part">Body part</label>
+        <input id="body_part" type="text" name="body_part" list="body_parts" value="<%= ex.body_part || '' %>" required placeholder="e.g. shoulders">
+        <datalist id="body_parts"><% for (const o of options.body_parts) { %><option value="<%= o %>"><% } %></datalist>
+      </div>
+      <div class="field">
+        <label for="equipment">Equipment</label>
+        <input id="equipment" type="text" name="equipment" list="equipment_list" value="<%= ex.equipment || '' %>" required placeholder="e.g. barbell">
+        <datalist id="equipment_list"><% for (const o of options.equipment) { %><option value="<%= o %>"><% } %></datalist>
+      </div>
+    </div>
+    <div class="two">
+      <div class="field">
+        <label for="target">Target muscle</label>
+        <input id="target" type="text" name="target" list="targets" value="<%= ex.target || '' %>" required placeholder="e.g. delts">
+        <datalist id="targets"><% for (const o of options.targets) { %><option value="<%= o %>"><% } %></datalist>
+      </div>
+      <div class="field">
+        <label for="secondary_muscles">Also works <small>optional, comma-separated</small></label>
+        <input id="secondary_muscles" type="text" name="secondary_muscles" value="<%= ex.secondary_muscles || '' %>" placeholder="e.g. triceps, upper chest">
+      </div>
+    </div>
+    <div class="field">
+      <label for="instructions">How to do it <small>optional, one step per line</small></label>
+      <textarea id="instructions" name="instructions" rows="5"><%= ex.instructions || '' %></textarea>
+    </div>
+    <div class="two">
+      <div class="field">
+        <label for="image">Photo <small>optional, JPG/PNG/WebP up to 8 MB</small></label>
+        <input id="image" type="file" name="image" accept="image/jpeg,image/png,image/webp">
+      </div>
+      <div class="field">
+        <label for="gif">Animation <small>optional GIF</small></label>
+        <input id="gif" type="file" name="gif" accept="image/gif">
+      </div>
+    </div>
+    <% if (editing && (ex.has_image || ex.has_gif)) { %><p class="small muted">Uploading a new file replaces the current one.</p><% } %>
+    <div class="btn-row">
+      <button class="btn btn-go btn-lg"><%= editing ? 'Save changes' : 'Add exercise' %></button>
+      <a class="btn btn-quiet btn-lg" href="<%= editing ? '/exercises/' + ex.id : '/exercises' %>">Cancel</a>
+    </div>
+  </form>
+
+  <% if (editing) { %>
+    <form method="post" action="/exercises/<%= ex.id %>/delete" style="margin-top:40px" onsubmit="return confirm('Delete this exercise? This can’t be undone.')">
+      <button class="btn btn-danger"><%- icon('trash') %> Delete exercise</button>
+    </form>
+  <% } %>
+</div>
+<%- include('../partials/foot') %>
