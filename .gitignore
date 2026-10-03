@@ -1,0 +1,11 @@
+node_modules/
+db/
+*.sqlite
+*.sqlite-*
+.env
+
+# Media lives in the SQLite DB (seeded from these folders); keep it out of git
+images/
+videos/
+
+.claude/settings.local.json
