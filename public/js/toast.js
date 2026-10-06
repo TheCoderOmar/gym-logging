@@ -1,10 +1,14 @@
-// Top-right notifications.
+// Top-right notifications that stack, newest on top.
 //   toast('Saved')                     → green, closes after 15 s
 //   toast('Not saved', { tone: 'error' })
-// Server-side messages arrive as ?msg=…(&tone=error) and are shown once on load.
+// Server-side messages arrive as ?msg=…(&tone=error). Toasts that are still running are kept
+// in sessionStorage, so they carry over to the next page with their remaining time.
 window.toast = (() => {
   const DURATION = 15000;
+  const MAX = 5;
+  const KEY = 'toasts';
   const host = document.getElementById('toasts');
+  const live = new Map(); // id → { message, tone, endsAt, close }
 
   const ICON = {
     ok: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
@@ -12,30 +16,41 @@ window.toast = (() => {
   };
   const svg = (p) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 
-  return function toast(message, { tone = 'ok', duration = DURATION } = {}) {
-    if (!host || !message) return;
+  function save() {
+    const list = [...live.entries()].map(([id, t]) => ({ id, message: t.message, tone: t.tone, endsAt: t.endsAt, duration: t.duration }));
+    try { sessionStorage.setItem(KEY, JSON.stringify(list)); } catch (e) { /* storage blocked */ }
+  }
+
+  function show({ restored = false, id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, message, tone = 'ok', duration = DURATION, endsAt = Date.now() + duration }) {
+    if (!host || !message) return () => {};
+    tone = tone === 'error' ? 'error' : 'ok';
     const el = document.createElement('div');
-    el.className = `toast toast-${tone === 'error' ? 'error' : 'ok'}`;
+    el.className = `toast toast-${tone}${restored ? ' restored' : ''}`;
     el.style.setProperty('--life', `${duration}ms`);
-    el.innerHTML = `${svg(ICON[tone] || ICON.ok)}<p></p>
+    el.innerHTML = `${svg(ICON[tone])}<p></p>
       <button type="button" class="toast-close" aria-label="Dismiss">${svg('<path d="M6 6l12 12M18 6 6 18"/>')}</button>
       <span class="toast-life" aria-hidden="true"></span>`;
     el.querySelector('p').textContent = message;
-    host.appendChild(el);
+    // A restored toast resumes its countdown bar where it left off.
+    el.querySelector('.toast-life').style.animationDelay = `${-(duration - (endsAt - Date.now()))}ms`;
+    host.prepend(el);
 
     // Countdown that pauses while hovered or focused, so it never vanishes mid-read.
-    let left = duration;
-    let started = Date.now();
-    let timer = setTimeout(close, left);
+    let timer = setTimeout(close, endsAt - Date.now());
+    let pausedLeft = null;
     const pause = () => {
+      if (pausedLeft !== null) return;
       clearTimeout(timer);
-      left -= Date.now() - started;
+      pausedLeft = live.get(id).endsAt - Date.now();
       el.classList.add('paused');
     };
     const resume = () => {
-      started = Date.now();
-      timer = setTimeout(close, left);
+      if (pausedLeft === null) return;
+      live.get(id).endsAt = Date.now() + pausedLeft;
+      timer = setTimeout(close, pausedLeft);
+      pausedLeft = null;
       el.classList.remove('paused');
+      save();
     };
     el.addEventListener('mouseenter', pause);
     el.addEventListener('mouseleave', resume);
@@ -44,12 +59,26 @@ window.toast = (() => {
 
     function close() {
       clearTimeout(timer);
+      live.delete(id);
+      save();
       el.classList.add('leaving');
       setTimeout(() => el.remove(), 200);
     }
     el.querySelector('.toast-close').addEventListener('click', close);
+
+    live.set(id, { message, tone, endsAt, duration, close });
+    // Too many at once: the oldest goes first.
+    while (live.size > MAX) live.values().next().value.close();
+    save();
     return close;
-  };
+  }
+
+  // Restore toasts still running from the previous page (oldest first, so the newest ends on top).
+  let saved = [];
+  try { saved = JSON.parse(sessionStorage.getItem(KEY)) || []; } catch (e) { /* nothing saved */ }
+  for (const t of saved) if (t.endsAt - Date.now() > 300) show({ ...t, restored: true });
+
+  return (message, opts = {}) => show({ message, ...opts });
 })();
 
 (() => {
