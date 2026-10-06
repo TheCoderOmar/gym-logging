@@ -67,8 +67,13 @@
     <div class="panel-head log-head-row">
       <div>
         <h2 id="log-title">Training log</h2>
-        <p class="muted small"><%= activeDays %> training <%= activeDays === 1 ? 'day' : 'days' %> in the last year</p>
+        <p class="muted small"><%= activeDays %> training <%= activeDays === 1 ? 'day' : 'days' %> in <%= year %></p>
       </div>
+      <nav class="year-nav" aria-label="Year">
+        <% if (prevYear) { %><a class="btn btn-sm btn-quiet" href="/?year=<%= prevYear %>" aria-label="Previous year"><%- icon('left') %></a><% } else { %><span class="btn btn-sm btn-quiet" aria-hidden="true" style="visibility:hidden"><%- icon('left') %></span><% } %>
+        <b class="num"><%= year %></b>
+        <% if (nextYear) { %><a class="btn btn-sm btn-quiet" href="/?year=<%= nextYear %>" aria-label="Next year"><%- icon('right') %></a><% } else { %><span class="btn btn-sm btn-quiet" aria-hidden="true" style="visibility:hidden"><%- icon('left') %></span><% } %>
+      </nav>
       <div class="chart-tabs" role="group" aria-label="Training log view">
         <button type="button" data-cal-view="levels" aria-pressed="true">Exercises</button>
         <button type="button" data-cal-view="emoji" aria-pressed="false">Emoji</button>
@@ -80,11 +85,11 @@
         <div class="cal-months" aria-hidden="true">
           <% for (const m of months) { %><span style="grid-column: <%= m.col + 1 %>"><%= m.label %></span><% } %>
         </div>
-        <div class="cal-days" aria-hidden="true"><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span></span></div>
+        <div class="cal-days" aria-hidden="true"><span>Sat</span><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span></div>
         <div class="cal-grid" role="list">
           <% for (const d of days) {
                const label = fmt.date(d.date.toISOString(), { weekday: 'short', year: 'numeric' }) + ': ' + (d.exercises ? d.exercises + (d.exercises === 1 ? ' exercise' : ' exercises') + ', ' + d.sets + ' sets · ' + d.areas.join(', ') : 'rest day');
-          %><% if (d.workoutId) { %><a role="listitem" class="cell l<%= d.level %>" href="/workouts/<%= d.workoutId %>" title="<%= label %>" aria-label="<%= label %>"><span class="emo"><%= d.emoji %></span></a><% } else { %><span role="listitem" class="cell l0" title="<%= label %>"></span><% } %><% } %>
+          %><% if (d.outside) { %><span class="cell out" aria-hidden="true"></span><% } else if (d.future) { %><span class="cell l0 future" aria-hidden="true"></span><% } else if (d.workoutId) { %><a role="listitem" class="cell l<%= d.level %><%= d.today ? ' is-today' : '' %>" href="/workouts/<%= d.workoutId %>" title="<%= label %>" aria-label="<%= label %>"><span class="emo"><%= d.emoji %></span></a><% } else { %><span role="listitem" class="cell l0<%= d.today ? ' is-today' : '' %>" title="<%= label %>"></span><% } %><% } %>
         </div>
       </div>
     </div>

@@ -169,11 +169,17 @@ function areaOf(bodyPart, target) {
   return 'other';
 }
 
+// Weeks in the training log start on Saturday (getDay() 6).
+const WEEK_START = 6;
+const weekdayIndex = (d) => (d.getDay() - WEEK_START + 7) % 7; // 0 = Saturday … 6 = Friday
+
 /**
- * GitHub-style calendar: every day from the Monday `weeks` weeks back through today.
+ * GitHub-style calendar for one calendar year (1 Jan – 31 Dec), in Saturday-first week columns.
+ * Days before 1 Jan / after 31 Dec that pad the first and last week are marked `outside`;
+ * days after today are marked `future`.
  * rows: { workout_id, started_at, exercise_id, body_part, target, sets }
  */
-function trainingCalendar(rows, { weeks = 53, now = new Date() } = {}) {
+function trainingCalendar(rows, { year = new Date().getFullYear(), now = new Date() } = {}) {
   const byDay = new Map();
   for (const row of rows) {
     if (!row.sets) continue;
@@ -187,25 +193,33 @@ function trainingCalendar(rows, { weeks = 53, now = new Date() } = {}) {
     d.areas.set(area, (d.areas.get(area) || 0) + row.sets);
   }
 
+  // Build dates at noon and by day offset: stepping local midnights drifts across
+  // DST changes that happen at midnight (e.g. Egypt).
+  const lead = weekdayIndex(new Date(year, 0, 1, 12));
+  const trail = 6 - weekdayIndex(new Date(year, 11, 31, 12));
+  const total = Math.round((new Date(year, 11, 31, 12) - new Date(year, 0, 1, 12)) / DAY) + 1 + lead + trail;
   const today = startOfDay(now);
-  const start = new Date(today);
-  start.setDate(start.getDate() - ((start.getDay() + 6) % 7) - 7 * (weeks - 1)); // Monday, `weeks` weeks ago
+
   const days = [];
-  for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+  for (let i = 0; i < total; i++) {
+    const d = new Date(year, 0, 1 - lead + i, 12);
     const key = dayKey(d);
     const info = byDay.get(key);
-    const areas = info ? [...info.areas.entries()].sort((a, b) => b[1] - a[1]) : [];
+    const areas = info ? [...info.areas.entries()].sort((x, y) => y[1] - x[1]) : [];
     days.push({
       key,
-      date: new Date(d),
-      weekday: (d.getDay() + 6) % 7, // 0 = Monday
+      date: d,
+      weekday: weekdayIndex(d),
+      outside: d.getFullYear() !== year,
+      future: startOfDay(d) > today,
+      today: startOfDay(d).getTime() === today.getTime(),
       exercises: info ? info.exercises.size : 0,
       sets: info ? info.sets : 0,
       level: info ? exerciseLevel(info.exercises.size) : 0,
       workoutId: info ? Math.min(...info.workouts) : null,
       area: areas.length ? areas[0][0] : null,
       emoji: areas.length ? EMOJI[areas[0][0]] : null,
-      areas: areas.map(([a]) => AREA_LABEL[a]),
+      areas: areas.map(([x]) => AREA_LABEL[x]),
     });
   }
   return days;
@@ -213,5 +227,5 @@ function trainingCalendar(rows, { weeks = 53, now = new Date() } = {}) {
 
 module.exports = {
   REGIONS, BUCKETS, EMOJI, AREA_LABEL, TARGET_POINTS, SECONDARY_POINTS, TRAINED_THRESHOLD,
-  regionOf, exerciseRegions, recencyBucket, intensity, daysBetween, muscleStatus, exerciseLevel, areaOf, trainingCalendar, dayKey,
+  regionOf, exerciseRegions, recencyBucket, intensity, daysBetween, muscleStatus, exerciseLevel, areaOf, trainingCalendar, dayKey, WEEK_START,
 };

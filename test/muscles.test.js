@@ -62,7 +62,21 @@ test('exercise levels', () => {
   assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7, 9].map(m.exerciseLevel), [0, 1, 1, 1, 2, 3, 4, 5, 5]);
 });
 
-test('training calendar: weeks start Monday, ends today, levels and emoji per day', () => {
+test('training calendar: one calendar year in Saturday-first weeks', () => {
+  const days = m.trainingCalendar([], { year: 2026, now: NOW });
+  assert.equal(days.length % 7, 0);
+  assert.equal(days[0].date.getDay(), 6);                 // starts on a Saturday
+  assert.equal(days[days.length - 1].date.getDay(), 5);   // ends on a Friday
+  const inYear = days.filter((d) => !d.outside);
+  assert.equal(inYear.length, 365);
+  assert.equal(inYear[0].key, '2026-01-01');
+  assert.equal(inYear[inYear.length - 1].key, '2026-12-31');
+  assert.equal(days.find((d) => d.today).key, m.dayKey(NOW));
+  assert.ok(days.find((d) => d.key === '2026-12-31').future);
+  assert.ok(!days.find((d) => d.key === '2026-10-05').future);
+});
+
+test('training calendar: levels and emoji per day', () => {
   const rows = [
     { workout_id: 1, started_at: daysAgo(0), exercise_id: 'a', body_part: 'upper arms', target: 'biceps', sets: 3 },
     { workout_id: 1, started_at: daysAgo(0), exercise_id: 'b', body_part: 'upper arms', target: 'triceps', sets: 3 },
@@ -70,16 +84,15 @@ test('training calendar: weeks start Monday, ends today, levels and emoji per da
     { workout_id: 1, started_at: daysAgo(0), exercise_id: 'd', body_part: 'back', target: 'lats', sets: 2 },
     { workout_id: 2, started_at: daysAgo(1), exercise_id: 'e', body_part: 'upper legs', target: 'glutes', sets: 4 },
   ];
-  const days = m.trainingCalendar(rows, { weeks: 2, now: NOW });
+  const days = m.trainingCalendar(rows, { year: 2026, now: NOW });
   assert.equal(days[0].weekday, 0);
-  assert.equal(days[0].date.getDay(), 1); // Monday
-  const today = days[days.length - 1];
+  const today = days.find((d) => d.today);
   assert.equal(today.key, m.dayKey(NOW));
   assert.equal(today.exercises, 4);
   assert.equal(today.level, 2);
   assert.equal(today.emoji, m.EMOJI.arms);
   assert.equal(today.workoutId, 1);
-  const yesterday = days[days.length - 2];
+  const yesterday = days[days.indexOf(today) - 1];
   assert.equal(yesterday.emoji, m.EMOJI.glutes);
   assert.equal(yesterday.level, 1);
   assert.equal(days[0].level, 0);
