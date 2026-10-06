@@ -42,7 +42,7 @@
 
   <div class="log-actions">
     <form method="post" action="/workouts/<%= w.id %>/to-routine"><button class="btn"><%- icon('routines') %> Save as routine</button></form>
-    <form method="post" action="/workouts/<%= w.id %>/delete" onsubmit="return confirm('Delete this workout and all its sets? This can’t be undone.')">
+    <form method="post" action="/workouts/<%= w.id %>/delete" data-confirm-title="Delete this workout?" data-confirm="All of its sets are deleted too. This can’t be undone.">
       <button class="btn btn-danger"><%- icon('trash') %> Delete workout</button>
     </form>
   </div>

@@ -59,7 +59,7 @@
   </form>
 
   <% if (editing) { %>
-    <form method="post" action="/exercises/<%= ex.id %>/delete" style="margin-top:40px" onsubmit="return confirm('Delete this exercise? This can’t be undone.')">
+    <form method="post" action="/exercises/<%= ex.id %>/delete" style="margin-top:40px" data-confirm-title="Delete this exercise?" data-confirm="It’s removed from your library. This can’t be undone.">
       <button class="btn btn-danger"><%- icon('trash') %> Delete exercise</button>
     </form>
   <% } %>

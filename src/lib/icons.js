@@ -16,6 +16,7 @@ const paths = {
   right: '<path d="m9 6 6 6-6 6"/>',
   play: '<path d="M7 4.5v15l12-7.5-12-7.5Z"/>',
   timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>',
   download: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',

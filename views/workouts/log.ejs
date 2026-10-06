@@ -29,7 +29,7 @@
     <% } else { %>
       <button type="button" class="btn btn-go btn-lg" id="finish"><%- icon('check') %> Finish workout</button>
     <% } %>
-    <form method="post" action="/workouts/<%= w.id %>/delete" onsubmit="return confirm('<%= w.finished_at ? 'Delete this workout and all its sets?' : 'Discard this workout? Everything logged in it will be deleted.' %>')">
+    <form method="post" action="/workouts/<%= w.id %>/delete" data-confirm-title="<%= w.finished_at ? 'Delete this workout?' : 'Discard this workout?' %>" data-confirm="<%= w.finished_at ? 'All of its sets are deleted too. This can’t be undone.' : 'Everything logged in it is deleted. This can’t be undone.' %>" data-confirm-label="<%= w.finished_at ? 'Delete' : 'Discard' %>">
       <button class="btn btn-danger btn-lg"><%- icon('trash') %> <%= w.finished_at ? 'Delete workout' : 'Discard' %></button>
     </form>
   </div>
