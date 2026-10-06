@@ -220,6 +220,7 @@ function trainingCalendar(rows, { year = new Date().getFullYear(), now = new Dat
       area: areas.length ? areas[0][0] : null,
       emoji: areas.length ? EMOJI[areas[0][0]] : null,
       areas: areas.map(([x]) => AREA_LABEL[x]),
+      areaKeys: areas.map(([x]) => x),
     });
   }
   return days;

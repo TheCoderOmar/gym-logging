@@ -322,11 +322,21 @@ a.cell:hover, a.cell:focus-visible { outline: 2px solid var(--iron); outline-off
 .cal[data-view='emoji'] .cell .emo { display: block; }
 
 .cal-legend { margin-top: 12px; font-size: 0.8125rem; color: var(--rubber); }
-.cal-legend .lv { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; }
+.cal-legend .lv {
+  display: inline-flex; align-items: center; gap: 6px; margin-right: 4px; padding: 4px 10px 4px 6px;
+  border: 1px solid transparent; border-radius: 999px; background: none; color: var(--rubber);
+  font: inherit; cursor: pointer;
+}
+.cal-legend .lv:hover { background: var(--wash); color: var(--iron); }
+.cal-legend .lv[aria-pressed='true'] { border-color: var(--iron); background: var(--wash); color: var(--iron); font-weight: 700; }
+.filter-status { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.filter-status[hidden] { display: none; }
+.cell.dim { opacity: 0.18; }
+.cal[data-view='emoji'] .cell.dim .emo { filter: grayscale(1); }
 .cal-legend .cell { --cell: 12px; }
-.legend-levels { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; }
+.legend-levels { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; }
 .legend-levels > .muted { margin-right: 12px; }
-.legend-emoji { display: none; flex-wrap: wrap; gap: 6px 0; }
+.legend-emoji { display: none; flex-wrap: wrap; gap: 4px 0; }
 .emo-k { font-size: 15px; }
 .log-panel[data-view='emoji'] .legend-levels { display: none; }
 .log-panel[data-view='emoji'] .legend-emoji { display: flex; }

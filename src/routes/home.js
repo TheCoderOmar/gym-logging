@@ -3,6 +3,8 @@ const fmt = require('../lib/format');
 const { muscleStatus, trainingCalendar, BUCKETS, EMOJI, AREA_LABEL } = require('../lib/muscles');
 const { bodyMap } = require('../lib/bodymap');
 
+// How many years ahead the training log lets you page to.
+const FUTURE_YEARS = 5;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 module.exports = (repo) => {
@@ -12,7 +14,10 @@ module.exports = (repo) => {
     const unit = res.locals.unit;
     const now = new Date();
     const thisYear = now.getFullYear();
-    const year = /^\d{4}$/.test(req.query.year || '') ? Number(req.query.year) : thisYear;
+    const firstYear = repo.totals().first_workout ? new Date(repo.totals().first_workout).getFullYear() : thisYear;
+    const minYear = Math.min(firstYear, thisYear);
+    const asked = /^\d{4}$/.test(req.query.year || '') ? Number(req.query.year) : thisYear;
+    const year = Math.max(minYear, Math.min(asked, thisYear + FUTURE_YEARS));
 
     // Body map looks back a year from today; recency colours top out at 6+ days anyway.
     const status = muscleStatus(repo.exerciseLog(new Date(now.getTime() - 365 * fmt.DAY).toISOString()), now);
@@ -26,8 +31,6 @@ module.exports = (repo) => {
       .map((d, i) => (d.date.getDate() === 1 && !d.outside ? { col: Math.floor(i / 7), label: MONTHS[d.date.getMonth()] } : null))
       .filter(Boolean);
 
-    const firstYear = repo.totals().first_workout ? new Date(repo.totals().first_workout).getFullYear() : thisYear;
-
     res.render('home', {
       title: '',
       stats: repo.statsSince(fmt.startOfWeek(now).toISOString(), unit),
@@ -37,13 +40,13 @@ module.exports = (repo) => {
       figures: bodyMap(status),
       groups,
       year,
-      prevYear: year > Math.min(firstYear, thisYear) ? year - 1 : null,
-      nextYear: year < thisYear ? year + 1 : null,
+      prevYear: year > minYear ? year - 1 : null,
+      nextYear: year < thisYear + FUTURE_YEARS ? year + 1 : null,
       days,
       months,
       weeks,
       activeDays: days.filter((d) => d.exercises && !d.outside).length,
-      emojiKey: Object.entries(EMOJI).filter(([k]) => k !== 'other').map(([k, e]) => ({ emoji: e, label: AREA_LABEL[k] })),
+      emojiKey: Object.entries(EMOJI).filter(([k]) => k !== 'other').map(([k, e]) => ({ key: k, emoji: e, label: AREA_LABEL[k] })),
       scripts: ['/js/home.js'],
     });
   });
