@@ -10,26 +10,37 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 module.exports = (repo) => {
   const router = express.Router();
 
-  router.get('/', (req, res) => {
-    const unit = res.locals.unit;
-    const now = new Date();
+  // Everything the training-log partial needs for one year (clamped to the pageable range).
+  function trainingLog(requestedYear, now = new Date()) {
     const thisYear = now.getFullYear();
-    const firstYear = repo.totals().first_workout ? new Date(repo.totals().first_workout).getFullYear() : thisYear;
-    const minYear = Math.min(firstYear, thisYear);
-    const asked = /^\d{4}$/.test(req.query.year || '') ? Number(req.query.year) : thisYear;
+    const first = repo.totals().first_workout;
+    const minYear = Math.min(first ? new Date(first).getFullYear() : thisYear, thisYear);
+    const asked = /^\d{4}$/.test(String(requestedYear || '')) ? Number(requestedYear) : thisYear;
     const year = Math.max(minYear, Math.min(asked, thisYear + FUTURE_YEARS));
-
-    // Body map looks back a year from today; recency colours top out at 6+ days anyway.
-    const status = muscleStatus(repo.exerciseLog(new Date(now.getTime() - 365 * fmt.DAY).toISOString()), now);
-    const groups = BUCKETS.map((b) => ({ ...b, muscles: Object.values(status).filter((s) => s.bucket === b.id) }));
 
     const yearLog = repo.exerciseLog(new Date(year, 0, 1).toISOString()).filter((r) => new Date(r.started_at).getFullYear() === year);
     const days = trainingCalendar(yearLog, { year, now });
-    const weeks = days.length / 7;
-    // Month labels sit over the week column that holds the 1st of the month.
-    const months = days
-      .map((d, i) => (d.date.getDate() === 1 && !d.outside ? { col: Math.floor(i / 7), label: MONTHS[d.date.getMonth()] } : null))
-      .filter(Boolean);
+    return {
+      year,
+      prevYear: year > minYear ? year - 1 : null,
+      nextYear: year < thisYear + FUTURE_YEARS ? year + 1 : null,
+      days,
+      weeks: days.length / 7,
+      // Month labels sit over the week column that holds the 1st of the month.
+      months: days
+        .map((d, i) => (d.date.getDate() === 1 && !d.outside ? { col: Math.floor(i / 7), label: MONTHS[d.date.getMonth()] } : null))
+        .filter(Boolean),
+      activeDays: days.filter((d) => d.exercises && !d.outside).length,
+      emojiKey: Object.entries(EMOJI).filter(([k]) => k !== 'other').map(([k, e]) => ({ key: k, emoji: e, label: AREA_LABEL[k] })),
+    };
+  }
+
+  router.get('/', (req, res) => {
+    const unit = res.locals.unit;
+    const now = new Date();
+
+    // Body map looks back a year from today; recency colours top out at 6+ days anyway.
+    const status = muscleStatus(repo.exerciseLog(new Date(now.getTime() - 365 * fmt.DAY).toISOString()), now);
 
     res.render('home', {
       title: '',
@@ -38,17 +49,15 @@ module.exports = (repo) => {
       recent: repo.listWorkouts({ limit: 6, unit }).rows,
       totals: repo.totals(),
       figures: bodyMap(status),
-      groups,
-      year,
-      prevYear: year > minYear ? year - 1 : null,
-      nextYear: year < thisYear + FUTURE_YEARS ? year + 1 : null,
-      days,
-      months,
-      weeks,
-      activeDays: days.filter((d) => d.exercises && !d.outside).length,
-      emojiKey: Object.entries(EMOJI).filter(([k]) => k !== 'other').map(([k, e]) => ({ key: k, emoji: e, label: AREA_LABEL[k] })),
+      groups: BUCKETS.map((b) => ({ ...b, muscles: Object.values(status).filter((s) => s.bucket === b.id) })),
+      ...trainingLog(req.query.year, now),
       scripts: ['/js/home.js'],
     });
+  });
+
+  // Just the training-log panel, so the year arrows can swap it in without a page reload.
+  router.get('/training-log', (req, res) => {
+    res.render('partials/training-log', trainingLog(req.query.year));
   });
 
   return router;
