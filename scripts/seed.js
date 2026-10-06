@@ -102,6 +102,8 @@ function seed(repo, { log = console.log } = {}) {
     });
   });
   log(`Seeded ${exercises.length} exercises${missingMedia ? ` (${missingMedia} with missing media files)` : ''}.`);
+  const scored = repo.ensureExerciseMuscles();
+  if (scored) log(`Added default muscle scores for ${scored} exercises.`);
 
   const routineCount = repo.get('SELECT COUNT(*) AS n FROM routines').n;
   if (routineCount === 0) {

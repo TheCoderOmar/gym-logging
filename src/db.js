@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { KG_PER_LB, convert, isUnit } = require('./lib/units');
+const { defaultMusclePoints, MAX_POINTS } = require('./lib/muscles');
 
 // GYM_DB lets you point the app at another database file (e.g. a demo copy).
 const DEFAULT_PATH = process.env.GYM_DB || path.join(__dirname, '..', 'db', 'gym.sqlite');
@@ -16,7 +17,9 @@ function openDb(file = DEFAULT_PATH) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;');
   db.exec(SCHEMA);
-  return createRepo(db);
+  const repo = createRepo(db);
+  repo.ensureExerciseMuscles();
+  return repo;
 }
 
 function createRepo(db) {
@@ -162,6 +165,7 @@ function createRepo(db) {
         id, f.name, f.body_part, f.equipment, f.target, f.muscle_group, f.secondary_muscles, f.instructions, f.instruction_steps,
       );
       saveMedia(id, media);
+      syncExerciseMuscles(id);
       return id;
     });
   }
@@ -178,7 +182,81 @@ function createRepo(db) {
       );
       if (!r.changes) throw new Error('Only custom exercises can be edited');
       saveMedia(id, media);
+      syncExerciseMuscles(id);
     });
+  }
+
+  /* ---------------- muscle scores per exercise ---------------- */
+
+  function insertMuscles(exerciseId, muscles) {
+    muscles.forEach((m, i) => {
+      run(
+        `INSERT INTO exercise_muscles (exercise_id, muscle, points, position) VALUES (?, ?, ?, ?)
+         ON CONFLICT(exercise_id, muscle) DO UPDATE SET position = excluded.position`,
+        exerciseId, m.muscle, m.points, i,
+      );
+    });
+  }
+
+  // Give every exercise that has no muscle scores yet the defaults (target 3, secondary 1).
+  function ensureExerciseMuscles() {
+    const missing = all(
+      `SELECT id, target, secondary_muscles FROM exercises
+        WHERE id NOT IN (SELECT DISTINCT exercise_id FROM exercise_muscles)`,
+    );
+    if (!missing.length) return 0;
+    tx(() => {
+      for (const ex of missing) insertMuscles(ex.id, defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]')));
+    });
+    return missing.length;
+  }
+
+  // After an exercise's target/secondary list changes: drop muscles no longer listed,
+  // add new ones with default scores, keep scores already set for muscles still listed.
+  // The target always scores at least the default target points.
+  function syncExerciseMuscles(exerciseId) {
+    const ex = get('SELECT target, secondary_muscles FROM exercises WHERE id = ?', exerciseId);
+    if (!ex) return;
+    const defaults = defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]'));
+    const current = new Map(all('SELECT muscle, points FROM exercise_muscles WHERE exercise_id = ?', exerciseId).map((r) => [r.muscle, r.points]));
+    const target = defaults[0] && defaults[0].muscle;
+    const next = defaults.map((d) => ({
+      muscle: d.muscle,
+      points: current.has(d.muscle) ? (d.muscle === target ? Math.max(current.get(d.muscle), d.points) : current.get(d.muscle)) : d.points,
+    }));
+    run('DELETE FROM exercise_muscles WHERE exercise_id = ?', exerciseId);
+    insertMuscles(exerciseId, next);
+  }
+
+  function getExerciseMuscles(exerciseId) {
+    const rows = all('SELECT muscle, points FROM exercise_muscles WHERE exercise_id = ? ORDER BY position', exerciseId);
+    if (rows.length) return rows.map((r) => ({ muscle: r.muscle, points: r.points }));
+    const ex = get('SELECT target, secondary_muscles FROM exercises WHERE id = ?', exerciseId);
+    return ex ? defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]')) : [];
+  }
+
+  // Update scores for muscles the exercise already lists. Unknown muscles are rejected.
+  function setExerciseMuscles(exerciseId, scores) {
+    const known = new Set(getExerciseMuscles(exerciseId).map((m) => m.muscle));
+    if (!known.size) throw new Error('Exercise not found');
+    tx(() => {
+      if (!get('SELECT 1 FROM exercise_muscles WHERE exercise_id = ? LIMIT 1', exerciseId)) insertMuscles(exerciseId, getExerciseMuscles(exerciseId));
+      for (const { muscle, points } of scores) {
+        if (!known.has(muscle)) throw new Error(`“${muscle}” isn’t listed for this exercise`);
+        const p = Number(points);
+        if (!Number.isInteger(p) || p < 0 || p > MAX_POINTS) throw new Error(`Score must be a whole number from 0 to ${MAX_POINTS}`);
+        run('UPDATE exercise_muscles SET points = ? WHERE exercise_id = ? AND muscle = ?', p, exerciseId, muscle);
+      }
+    });
+    return getExerciseMuscles(exerciseId);
+  }
+
+  function resetExerciseMuscles(exerciseId) {
+    tx(() => {
+      run('DELETE FROM exercise_muscles WHERE exercise_id = ?', exerciseId);
+      syncExerciseMuscles(exerciseId);
+    });
+    return getExerciseMuscles(exerciseId);
   }
 
   function deleteCustomExercise(id) {
@@ -574,6 +652,7 @@ function createRepo(db) {
   // One row per exercise per workout with its completed working-set count, since a date.
   // Includes the workout in progress so today's ticked-off sets show up immediately.
   function exerciseLog(isoStart) {
+    const muscleCache = new Map();
     return all(
       `SELECT w.id AS workout_id, w.started_at, e.id AS exercise_id, e.body_part, e.target, e.secondary_muscles,
               COUNT(s.id) AS sets
@@ -583,7 +662,11 @@ function createRepo(db) {
         WHERE w.started_at >= ? AND ${WORKING_SQL}
         GROUP BY we.id ORDER BY w.started_at`,
       isoStart,
-    ).map((r) => ({ ...r, secondary_muscles: JSON.parse(r.secondary_muscles || '[]') }));
+    ).map((r) => {
+      // One muscle-score lookup per distinct exercise, not per row.
+      if (!muscleCache.has(r.exercise_id)) muscleCache.set(r.exercise_id, getExerciseMuscles(r.exercise_id));
+      return { ...r, secondary_muscles: JSON.parse(r.secondary_muscles || '[]'), muscles: muscleCache.get(r.exercise_id) };
+    });
   }
 
   function backupTo(file) {
@@ -596,6 +679,7 @@ function createRepo(db) {
     getSetting, setSetting, displayUnit,
     exerciseCount, searchExercises, filterOptions, getExercise, getMedia, saveMedia,
     createCustomExercise, updateCustomExercise, deleteCustomExercise, nextCustomId,
+    ensureExerciseMuscles, syncExerciseMuscles, getExerciseMuscles, setExerciseMuscles, resetExerciseMuscles,
     listRoutines, getRoutine, saveRoutine, deleteRoutine,
     lastUnitFor, previousSets, startWorkout, inProgressWorkout, getWorkout, updateWorkout,
     finishWorkout, deleteWorkout, listWorkouts, workoutToRoutine,

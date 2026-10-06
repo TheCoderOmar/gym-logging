@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const { sessionSummaries, personalRecords } = require('../lib/stats');
+const { defaultMusclePoints, regionLabelOf, TRAINED_THRESHOLD, MAX_POINTS } = require('../lib/muscles');
 
 const PAGE_SIZE = 48;
 
@@ -20,6 +21,17 @@ function mediaFrom(files = {}) {
 
 module.exports = (repo) => {
   const router = express.Router();
+
+  // Muscle scores for the exercise page: role (target/also works), default and heat-map area.
+  function muscleRows(ex) {
+    const defaults = new Map(defaultMusclePoints(ex.target, ex.secondary_muscles).map((d) => [d.muscle, d.points]));
+    return repo.getExerciseMuscles(ex.id).map((m) => ({
+      ...m,
+      role: m.muscle === String(ex.target).toLowerCase() ? 'Target' : 'Also works',
+      defaultPoints: defaults.get(m.muscle) ?? m.points,
+      area: regionLabelOf(m.muscle),
+    }));
+  }
 
   router.get('/', (req, res) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -77,7 +89,10 @@ module.exports = (repo) => {
       sessions,
       recent: recent.filter((r) => r.sets.length),
       prs: personalRecords(sets, unit),
-      scripts: sessions.length > 1 ? ['/vendor/chart.js/chart.umd.min.js', '/js/charts.js'] : [],
+      muscles: muscleRows(ex),
+      threshold: TRAINED_THRESHOLD,
+      maxPoints: MAX_POINTS,
+      scripts: [...(sessions.length > 1 ? ['/vendor/chart.js/chart.umd.min.js', '/js/charts.js'] : []), '/js/muscle-scores.js'],
     });
   });
 

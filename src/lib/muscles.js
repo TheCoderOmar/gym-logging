@@ -52,17 +52,41 @@ function regionOf(name) {
   return NAME_TO_REGION[String(name || '').trim().toLowerCase()] || null;
 }
 
-// Regions an exercise works, with points per set. A muscle listed as both target
-// and secondary only gets the target points.
-function exerciseRegions(target, secondary = []) {
+// Heat-map area a muscle name counts toward, e.g. "rear deltoids" → "Shoulders"; null if none.
+function regionLabelOf(name) {
+  const id = regionOf(name);
+  return id ? REGIONS.find((r) => r.id === id).label : null;
+}
+
+// Highest score a muscle can get per set (the editor offers 0–3).
+const MAX_POINTS = 3;
+
+// Default per-set scores for an exercise: target 3, each "also works" muscle 1.
+// A muscle listed as both target and secondary keeps the target score.
+function defaultMusclePoints(target, secondary = []) {
   const out = new Map();
-  for (const m of secondary) {
-    const r = regionOf(m);
-    if (r) out.set(r, Math.max(out.get(r) || 0, SECONDARY_POINTS));
-  }
-  const t = regionOf(target);
+  const t = String(target || '').trim().toLowerCase();
   if (t) out.set(t, TARGET_POINTS);
+  for (const m of secondary) {
+    const name = String(m || '').trim().toLowerCase();
+    if (name && !out.has(name)) out.set(name, SECONDARY_POINTS);
+  }
+  return [...out].map(([muscle, points]) => ({ muscle, points }));
+}
+
+// Muscle scores → heat-map regions. Two muscles in the same region (e.g. "back" and
+// "rhomboids") don't add up; the region takes the higher score.
+function regionPoints(muscles) {
+  const out = new Map();
+  for (const { muscle, points } of muscles) {
+    const r = regionOf(muscle);
+    if (r && points > 0) out.set(r, Math.max(out.get(r) || 0, points));
+  }
   return out;
+}
+
+function exerciseRegions(target, secondary = []) {
+  return regionPoints(defaultMusclePoints(target, secondary));
 }
 
 // Whole calendar days between two dates, in local time.
@@ -101,7 +125,8 @@ const dayKey = (d) => {
 
 /**
  * Per-region status from per-exercise rows.
- * rows: { started_at, target, secondary_muscles (array), sets } — `sets` = working sets done.
+ * rows: { started_at, sets, muscles?: [{ muscle, points }], target, secondary_muscles }
+ * `sets` = working sets done. Uses the exercise's saved muscle scores when given, else the defaults.
  * Returns { [regionId]: { region, label, bucket, days, lastDate, points, sets, intensity } }
  */
 function muscleStatus(rows, now = new Date()) {
@@ -110,7 +135,8 @@ function muscleStatus(rows, now = new Date()) {
   for (const row of rows) {
     if (!row.sets) continue;
     const key = dayKey(row.started_at);
-    for (const [region, pts] of exerciseRegions(row.target, row.secondary_muscles)) {
+    const muscles = row.muscles && row.muscles.length ? row.muscles : defaultMusclePoints(row.target, row.secondary_muscles);
+    for (const [region, pts] of regionPoints(muscles)) {
       if (!perDay.has(region)) perDay.set(region, new Map());
       const days = perDay.get(region);
       const d = days.get(key) || { points: 0, sets: 0, date: row.started_at };
@@ -227,6 +253,6 @@ function trainingCalendar(rows, { year = new Date().getFullYear(), now = new Dat
 }
 
 module.exports = {
-  REGIONS, BUCKETS, EMOJI, AREA_LABEL, TARGET_POINTS, SECONDARY_POINTS, TRAINED_THRESHOLD,
-  regionOf, exerciseRegions, recencyBucket, intensity, daysBetween, muscleStatus, exerciseLevel, areaOf, trainingCalendar, dayKey, WEEK_START,
+  REGIONS, BUCKETS, EMOJI, AREA_LABEL, TARGET_POINTS, SECONDARY_POINTS, TRAINED_THRESHOLD, MAX_POINTS,
+  regionOf, regionLabelOf, defaultMusclePoints, regionPoints, exerciseRegions, recencyBucket, intensity, daysBetween, muscleStatus, exerciseLevel, areaOf, trainingCalendar, dayKey, WEEK_START,
 };

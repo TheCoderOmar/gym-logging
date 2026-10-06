@@ -131,3 +131,42 @@ test('updateSet validates input', () => {
   assert.throws(() => repo.updateSet(s.id, { reps: 2.5 }));
   assert.equal(repo.updateSet(s.id, { weight: '', reps: '' }).weight, null);
 });
+
+test('muscle scores: defaults for every exercise, editable, resettable, synced on edit', () => {
+  const repo = openDb(':memory:');
+  repo.db.prepare("INSERT INTO exercises (id, name, body_part, equipment, target, secondary_muscles) VALUES ('0150', 'cable pulldown', 'back', 'cable', 'lats', ?)")
+    .run(JSON.stringify(['biceps', 'rhomboids', 'rear deltoids']));
+  assert.equal(repo.ensureExerciseMuscles(), 1);
+  assert.equal(repo.ensureExerciseMuscles(), 0); // idempotent
+  assert.deepEqual(repo.getExerciseMuscles('0150'), [
+    { muscle: 'lats', points: 3 }, { muscle: 'biceps', points: 1 }, { muscle: 'rhomboids', points: 1 }, { muscle: 'rear deltoids', points: 1 },
+  ]);
+
+  repo.setExerciseMuscles('0150', [{ muscle: 'rear deltoids', points: 2 }]);
+  assert.equal(repo.getExerciseMuscles('0150').find((m) => m.muscle === 'rear deltoids').points, 2);
+  assert.throws(() => repo.setExerciseMuscles('0150', [{ muscle: 'quads', points: 2 }]), /isn’t listed/);
+  assert.throws(() => repo.setExerciseMuscles('0150', [{ muscle: 'biceps', points: 4 }]), /0 to 3/);
+
+  // The heat map uses the edited score: 2 sets × 2 points = 4 ≥ 3 → shoulders count as trained.
+  const wid = repo.startWorkout();
+  const we = repo.addWorkoutExercise(wid, '0150');
+  const [s] = repo.getWorkout(wid).exercises[0].sets;
+  repo.updateSet(s.id, { weight: 50, reps: 10, done: 1 });
+  const s2 = repo.addSet(we);
+  repo.updateSet(s2.id, { done: 1 });
+  const { muscleStatus } = require('../src/lib/muscles');
+  const status = muscleStatus(repo.exerciseLog('2000-01-01'), new Date());
+  assert.equal(status.shoulders.bucket, 'today');
+  assert.equal(status.shoulders.points, 4);
+  assert.equal(status.biceps.bucket, 'never'); // 2 sets × 1 point
+
+  assert.equal(repo.resetExerciseMuscles('0150').find((m) => m.muscle === 'rear deltoids').points, 1);
+
+  // Custom exercise: scores follow edits to its muscle lists, keeping changed scores.
+  const id = repo.createCustomExercise({ name: 'Landmine press', body_part: 'shoulders', equipment: 'barbell', target: 'delts', secondary_muscles: 'triceps, upper chest' });
+  repo.setExerciseMuscles(id, [{ muscle: 'triceps', points: 2 }]);
+  repo.updateCustomExercise(id, { name: 'Landmine press', body_part: 'shoulders', equipment: 'barbell', target: 'delts', secondary_muscles: 'triceps, serratus anterior' });
+  assert.deepEqual(repo.getExerciseMuscles(id), [
+    { muscle: 'delts', points: 3 }, { muscle: 'triceps', points: 2 }, { muscle: 'serratus anterior', points: 1 },
+  ]);
+});
