@@ -35,6 +35,7 @@ app.use((req, res, next) => {
   res.locals.active = (prefix) => (prefix === '/' ? fullPath === '/' : fullPath.startsWith(prefix));
   res.locals.live = repo.inProgressWorkout();
   res.locals.flash = req.query.msg || '';
+  res.locals.flashTone = req.query.tone === 'error' ? 'error' : 'ok';
   next();
 });
 

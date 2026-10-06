@@ -1,53 +1,69 @@
 <%- include('partials/head') %>
 <%
   const h = new Date().getHours();
-  const greeting = h < 5 ? 'Late session?' : h < 12 ? 'Morning.' : h < 17 ? 'Afternoon.' : 'Evening.';
+  const greeting = h < 5 ? 'Late session?' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
 %>
-<div class="page">
-  <div class="home-hero">
-    <section class="start-panel" aria-labelledby="start-title">
-      <h1 id="start-title"><%= live ? 'You’re mid-workout.' : greeting %></h1>
-      <% if (live) { %>
-        <p class="lede"><%= live.name %> started at <%= fmt.time(live.started_at) %>. Pick up where you left off.</p>
-        <div class="btn-row"><a class="btn btn-go btn-lg" href="/workouts/<%= live.id %>/log"><%- icon('play') %> Back to workout</a></div>
-      <% } else { %>
-        <p class="lede"><%= totals.workouts ? 'What are you training today?' : 'Start with a routine below, or an empty workout and add exercises as you go.' %></p>
-        <form method="post" action="/workouts/start">
-          <button class="btn btn-go btn-lg"><%- icon('plus') %> Start empty workout</button>
-        </form>
-        <% if (routines.length) { %>
-          <form class="routine-starts" method="post" action="/workouts/start">
-            <% for (const r of routines) { %>
-              <button class="routine-start" name="routine_id" value="<%= r.id %>">
-                <span>
-                  <strong><%= r.name %></strong><br>
-                  <span><%= r.exercises.length %> exercises · <%= r.total_sets %> sets<%= r.last_done ? ' · last done ' + fmt.relDay(r.last_done).toLowerCase() : '' %></span>
-                </span>
-                <%- icon('play') %>
-              </button>
-            <% } %>
-          </form>
-        <% } %>
+<div class="page page-wide">
+  <section class="home-top" aria-labelledby="start-title">
+    <div>
+      <h1 id="start-title"><%= live ? 'You’re mid-workout' : greeting %></h1>
+      <p class="muted"><%= live ? live.name + ' started at ' + fmt.time(live.started_at) + '.' : (totals.workouts ? 'Check what’s recovered, then pick a session.' : 'Log a workout and this page fills in with what you’ve trained.') %></p>
+    </div>
+    <% if (live) { %>
+      <a class="btn btn-go btn-lg" href="/workouts/<%= live.id %>/log"><%- icon('play') %> Back to workout</a>
+    <% } else { %>
+      <form method="post" action="/workouts/start"><button class="btn btn-go btn-lg"><%- icon('plus') %> Start empty workout</button></form>
+    <% } %>
+  </section>
+
+  <% if (!live && routines.length) { %>
+    <form class="routine-chips" method="post" action="/workouts/start" aria-label="Start a routine">
+      <% for (const r of routines) { %>
+        <button class="routine-chip" name="routine_id" value="<%= r.id %>" title="<%= r.exercises.length %> exercises · <%= r.total_sets %> sets<%= r.last_done ? ' · last done ' + fmt.relDay(r.last_done).toLowerCase() : '' %>">
+          <%- icon('play') %> <%= r.name %>
+        </button>
       <% } %>
+    </form>
+  <% } %>
+
+  <div class="home-grid">
+    <section class="panel body-panel" aria-labelledby="body-title">
+      <div class="panel-head">
+        <h2 id="body-title">Muscle recovery</h2>
+        <p class="muted small">Colour shows when each muscle last took real work. A stronger colour means a harder session.</p>
+      </div>
+      <div class="figures">
+        <figure><%- figures.front %><figcaption>Front</figcaption></figure>
+        <figure><%- figures.back %><figcaption>Back</figcaption></figure>
+      </div>
+      <ul class="recency-key" aria-label="Colour key">
+        <% for (const g of groups) { %><li><span class="swatch b-<%= g.id %>"></span><%= g.label %></li><% } %>
+      </ul>
     </section>
 
-    <section class="week" aria-labelledby="week-title">
-      <h2 id="week-title">This week</h2>
-      <div class="week-days">
-        <% for (const d of days) { %>
-          <div class="week-day <%= d.trained ? 'trained' : '' %> <%= d.today ? 'today' : '' %>">
-            <span class="dot" aria-hidden="true"></span>
-            <span><%= d.label %><span class="sr-only"><%= d.trained ? ' trained' : '' %></span></span>
+    <aside class="side-col">
+      <section class="week" aria-labelledby="week-title">
+        <h2 id="week-title">This week</h2>
+        <div class="week-stats">
+          <div><b class="num"><%= stats.workouts %></b><span><%= stats.workouts === 1 ? 'workout' : 'workouts' %></span></div>
+          <div><b class="num"><%= stats.sets %></b><span>working sets</span></div>
+          <div><b class="num"><%= fmt.num(stats.volume) %></b><span><%= unit %> lifted</span></div>
+        </div>
+      </section>
+
+      <section class="panel recovery-list" aria-labelledby="rec-title">
+        <h2 id="rec-title" class="sr-only">Muscles by last trained</h2>
+        <% for (const g of groups) { if (!g.muscles.length) continue; %>
+          <div class="rec-group">
+            <h3><span class="swatch b-<%= g.id %>" aria-hidden="true"></span><%= g.label %></h3>
+            <p><%= g.muscles.map((m) => m.label).join(', ') %></p>
           </div>
         <% } %>
-      </div>
-      <div class="week-stats">
-        <div><b class="num"><%= stats.workouts %></b><span><%= stats.workouts === 1 ? 'workout' : 'workouts' %></span></div>
-        <div><b class="num"><%= stats.sets %></b><span>working sets</span></div>
-        <div><b class="num"><%= fmt.num(stats.volume) %></b><span><%= unit %> lifted</span></div>
-      </div>
-    </section>
+      </section>
+    </aside>
   </div>
+
+  <%- include('partials/training-log') %>
 
   <section class="section" aria-labelledby="recent-title">
     <div class="section-head">

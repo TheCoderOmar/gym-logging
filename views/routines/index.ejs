@@ -29,12 +29,15 @@
             <% } %>
             <% if (!r.exercises.length) { %><li class="muted">No exercises yet</li><% } %>
           </ol>
-          <div class="btn-row">
+          <div class="routine-actions">
             <form method="post" action="/workouts/start">
               <button class="btn btn-go btn-sm" name="routine_id" value="<%= r.id %>" <%= live || !r.exercises.length ? 'disabled' : '' %> title="<%= live ? 'Finish your current workout first' : '' %>"><%- icon('play') %> Start</button>
             </form>
             <a class="btn btn-sm" href="/routines/<%= r.id %>/edit"><%- icon('edit') %> Edit</a>
-            <form method="post" action="/routines/<%= r.id %>/duplicate"><button class="btn btn-sm btn-quiet">Duplicate</button></form>
+            <form class="routine-dup" method="post" action="/routines/<%= r.id %>/duplicate"><button class="btn btn-sm btn-quiet" aria-label="Duplicate <%= r.name %>" title="Duplicate routine"><%- icon('copy') %></button></form>
+            <form class="routine-delete" method="post" action="/routines/<%= r.id %>/delete" data-confirm-title="Delete “<%= r.name %>”?" data-confirm="The routine is removed. Workouts you already did with it stay in your history.">
+              <button class="btn btn-sm btn-quiet btn-danger" aria-label="Delete <%= r.name %>" title="Delete routine"><%- icon('trash') %></button>
+            </form>
           </div>
         </article>
       <% } %>

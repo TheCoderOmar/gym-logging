@@ -33,6 +33,27 @@
         </form>
       <% } %>
 
+      <section class="muscle-scores" id="muscle-scores" data-exercise="<%= ex.id %>" aria-labelledby="ms-title">
+        <div class="ms-head">
+          <h2 id="ms-title">Muscle score per set</h2>
+          <button type="button" class="btn btn-sm btn-quiet" data-reset <%= muscles.every((m) => m.points === m.defaultPoints) ? 'hidden' : '' %>>Reset to defaults</button>
+        </div>
+        <p class="muted small">Each working set adds these points to the muscle on your recovery map. A muscle shows as trained once it reaches <%= threshold %> points in a day.</p>
+        <ul class="ms-list">
+          <% for (const m of muscles) { %>
+            <li data-muscle="<%= m.muscle %>" data-default="<%= m.defaultPoints %>">
+              <div class="ms-name">
+                <strong><%= fmt.cap(m.muscle) %></strong>
+                <span><%= m.role %> · <%= m.area ? m.area + ' on the map' : 'not on the body map' %><span class="ms-default" <%= m.points === m.defaultPoints ? 'hidden' : '' %>> · default <%= m.defaultPoints %></span></span>
+              </div>
+              <div class="ms-pick" role="radiogroup" aria-label="Points per set for <%= m.muscle %>">
+                <% for (let p = 0; p <= maxPoints; p++) { %><button type="button" role="radio" aria-checked="<%= p === m.points %>" data-points="<%= p %>" tabindex="<%= p === m.points ? 0 : -1 %>"><%= p %></button><% } %>
+              </div>
+            </li>
+          <% } %>
+        </ul>
+      </section>
+
       <% const steps = (ex.instruction_steps && ex.instruction_steps.en) || []; %>
       <% if (steps.length) { %>
         <section class="section" style="margin-top:32px">

@@ -78,3 +78,13 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 INSERT OR IGNORE INTO settings (key, value) VALUES ('display_unit', 'kg');
+
+-- Points each muscle gets per working set of an exercise (feeds the body heat map).
+-- Filled with defaults (target 3, secondary 1) for every exercise; edits are kept.
+CREATE TABLE IF NOT EXISTS exercise_muscles (
+  exercise_id TEXT NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+  muscle      TEXT NOT NULL,
+  points      INTEGER NOT NULL CHECK (points BETWEEN 0 AND 3),
+  position    INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (exercise_id, muscle)
+);

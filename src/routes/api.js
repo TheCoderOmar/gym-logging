@@ -32,6 +32,16 @@ module.exports = (repo) => {
     res.json({ total, rows });
   });
 
+  // Per-set muscle scores for an exercise: { scores: [{ muscle, points }] }
+  router.put('/exercises/:id/muscles', (req, res) => {
+    const scores = Array.isArray(req.body.scores) ? req.body.scores : [];
+    res.json({ muscles: repo.setExerciseMuscles(String(req.params.id), scores) });
+  });
+
+  router.post('/exercises/:id/muscles/reset', (req, res) => {
+    res.json({ muscles: repo.resetExerciseMuscles(String(req.params.id)) });
+  });
+
   router.get('/workouts/:id', (req, res) => {
     const state = workoutState(id(req));
     if (!state) return res.status(404).json({ error: 'Workout not found' });

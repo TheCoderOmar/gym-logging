@@ -10,6 +10,8 @@
     <a class="live-strip" href="/workouts/<%= live.id %>/log"><span>Back to <%= live.name %></span><span>Started <%= fmt.time(live.started_at) %></span></a>
   <% } %>
 </div>
+<script src="/js/confirm.js"></script>
+<script src="/js/toast.js"></script>
 <% if (typeof scripts !== 'undefined') { for (const s of scripts) { %><script src="<%= s %>"></script>
 <% } } %>
 </body>

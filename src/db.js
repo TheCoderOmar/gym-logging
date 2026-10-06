@@ -2,8 +2,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { KG_PER_LB, convert, isUnit } = require('./lib/units');
+const { defaultMusclePoints, legacyMusclePoints, musclesInRegion, REGIONS, MAX_POINTS, MUSCLE_DEFAULTS_VERSION } = require('./lib/muscles');
 
-const DEFAULT_PATH = path.join(__dirname, '..', 'db', 'gym.sqlite');
+// GYM_DB lets you point the app at another database file (e.g. a demo copy).
+const DEFAULT_PATH = process.env.GYM_DB || path.join(__dirname, '..', 'db', 'gym.sqlite');
 const SCHEMA = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 
 // Weight of a set in kg, as a SQL expression over the `sets` table alias `s`.
@@ -15,7 +17,9 @@ function openDb(file = DEFAULT_PATH) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;');
   db.exec(SCHEMA);
-  return createRepo(db);
+  const repo = createRepo(db);
+  repo.ensureExerciseMuscles();
+  return repo;
 }
 
 function createRepo(db) {
@@ -70,7 +74,12 @@ function createRepo(db) {
     return get('SELECT COUNT(*) AS n FROM exercises').n;
   }
 
-  function searchExercises({ q = '', body_part = '', equipment = '', target = '', custom = false, limit = 60, offset = 0 } = {}) {
+  /**
+   * Search the library. `regions` (heat-map region ids) keeps exercises that work every one
+   * of them (score > 0), best combined score first. If none work them all, falls back to the
+   * exercises that work the most of them and sets `partial`.
+   */
+  function searchExercises({ q = '', body_part = '', equipment = '', target = '', custom = false, regions = [], limit = 60, offset = 0 } = {}) {
     const where = [];
     const params = [];
     for (const word of q.trim().toLowerCase().split(/\s+/).filter(Boolean)) {
@@ -82,19 +91,63 @@ function createRepo(db) {
     if (target) { where.push('e.target = ?'); params.push(target); }
     if (custom) where.push('e.is_custom = 1');
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    const total = get(`SELECT COUNT(*) AS n FROM exercises e ${whereSql}`, ...params).n;
-    // Exercises you've actually done float to the top, then alphabetical.
-    const rows = all(
-      `SELECT e.id, e.name, e.body_part, e.equipment, e.target, e.is_custom,
-              (SELECT COUNT(*) FROM workout_exercises we WHERE we.exercise_id = e.id) AS times_done,
-              (m.image IS NOT NULL) AS has_image
-         FROM exercises e LEFT JOIN exercise_media m ON m.exercise_id = e.id
-         ${whereSql}
-        ORDER BY times_done > 0 DESC, e.name
-        LIMIT ? OFFSET ?`,
-      ...params, limit, offset,
-    );
-    return { total, rows };
+
+    const valid = new Set(REGIONS.map((r) => r.id));
+    regions = [...new Set(regions)].filter((r) => valid.has(r));
+    if (!regions.length) {
+      const total = get(`SELECT COUNT(*) AS n FROM exercises e ${whereSql}`, ...params).n;
+      // Exercises you've actually done float to the top, then alphabetical.
+      const rows = all(
+        `SELECT e.id, e.name, e.body_part, e.equipment, e.target, e.is_custom,
+                (SELECT COUNT(*) FROM workout_exercises we WHERE we.exercise_id = e.id) AS times_done,
+                (m.image IS NOT NULL) AS has_image
+           FROM exercises e LEFT JOIN exercise_media m ON m.exercise_id = e.id
+           ${whereSql}
+          ORDER BY times_done > 0 DESC, e.name
+          LIMIT ? OFFSET ?`,
+        ...params, limit, offset,
+      );
+      return { total, rows, partial: false };
+    }
+
+    // One column per selected region: the exercise's best score for any muscle in it (NULL if none).
+    const regionCols = [];
+    const regionParams = [];
+    regions.forEach((r, i) => {
+      const names = musclesInRegion(r);
+      regionCols.push(
+        `(SELECT MAX(em.points) FROM exercise_muscles em
+           WHERE em.exercise_id = e.id AND em.points > 0 AND em.muscle IN (${names.map(() => '?').join(', ')})) AS r${i}`,
+      );
+      regionParams.push(...names);
+    });
+    const hits = regions.map((_, i) => `(r${i} IS NOT NULL)`).join(' + ');
+    const score = regions.map((_, i) => `COALESCE(r${i}, 0)`).join(' + ');
+    const inner = `
+      SELECT e.id, e.name, e.body_part, e.equipment, e.target, e.is_custom,
+             (SELECT COUNT(*) FROM workout_exercises we WHERE we.exercise_id = e.id) AS times_done,
+             (m.image IS NOT NULL) AS has_image,
+             ${regionCols.join(',\n             ')}
+        FROM exercises e LEFT JOIN exercise_media m ON m.exercise_id = e.id
+        ${whereSql}`;
+    const scored = `SELECT *, ${hits} AS hits, ${score} AS score FROM (${inner})`;
+    const run = (minHits) => ({
+      total: get(`SELECT COUNT(*) AS n FROM (${scored}) WHERE hits >= ?`, ...regionParams, ...params, minHits).n,
+      rows: all(
+        `SELECT * FROM (${scored}) WHERE hits >= ?
+          ORDER BY hits DESC, score DESC, times_done > 0 DESC, name
+          LIMIT ? OFFSET ?`,
+        ...regionParams, ...params, minHits, limit, offset,
+      ),
+    });
+
+    let result = run(regions.length);
+    let partial = false;
+    if (!result.total && regions.length > 1) {
+      result = run(1);
+      partial = result.total > 0;
+    }
+    return { ...result, partial };
   }
 
   function filterOptions() {
@@ -161,6 +214,7 @@ function createRepo(db) {
         id, f.name, f.body_part, f.equipment, f.target, f.muscle_group, f.secondary_muscles, f.instructions, f.instruction_steps,
       );
       saveMedia(id, media);
+      syncExerciseMuscles(id);
       return id;
     });
   }
@@ -177,7 +231,109 @@ function createRepo(db) {
       );
       if (!r.changes) throw new Error('Only custom exercises can be edited');
       saveMedia(id, media);
+      syncExerciseMuscles(id);
     });
+  }
+
+  /* ---------------- muscle scores per exercise ---------------- */
+
+  function insertMuscles(exerciseId, muscles) {
+    muscles.forEach((m, i) => {
+      run(
+        `INSERT INTO exercise_muscles (exercise_id, muscle, points, position) VALUES (?, ?, ?, ?)
+         ON CONFLICT(exercise_id, muscle) DO UPDATE SET position = excluded.position`,
+        exerciseId, m.muscle, m.points, i,
+      );
+    });
+  }
+
+  // Give every exercise that has no muscle scores yet the defaults (see defaultMusclePoints),
+  // and move exercises still on the original 3/1 rule to the current defaults once.
+  function ensureExerciseMuscles() {
+    upgradeMuscleDefaults();
+    const missing = all(
+      `SELECT id, name, target, secondary_muscles FROM exercises
+        WHERE id NOT IN (SELECT DISTINCT exercise_id FROM exercise_muscles)`,
+    );
+    if (!missing.length) return 0;
+    tx(() => {
+      for (const ex of missing) insertMuscles(ex.id, defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]'), ex.name));
+    });
+    return missing.length;
+  }
+
+  // Exercises whose scores still exactly match the old rule were never edited, so they get
+  // the new defaults. Anything you changed by hand is left alone.
+  function upgradeMuscleDefaults() {
+    if (Number(getSetting('muscle_defaults_version', '1')) >= MUSCLE_DEFAULTS_VERSION) return;
+    const rows = all('SELECT exercise_id, muscle, points FROM exercise_muscles ORDER BY exercise_id, position');
+    const byExercise = new Map();
+    for (const r of rows) {
+      if (!byExercise.has(r.exercise_id)) byExercise.set(r.exercise_id, []);
+      byExercise.get(r.exercise_id).push(`${r.muscle}:${r.points}`);
+    }
+    const exercises = all('SELECT id, name, target, secondary_muscles FROM exercises');
+    tx(() => {
+      for (const ex of exercises) {
+        const saved = byExercise.get(ex.id);
+        if (!saved) continue;
+        const secondary = JSON.parse(ex.secondary_muscles || '[]');
+        const legacy = legacyMusclePoints(ex.target, secondary).map((m) => `${m.muscle}:${m.points}`);
+        if (saved.join('|') !== legacy.join('|')) continue; // edited by hand
+        for (const m of defaultMusclePoints(ex.target, secondary, ex.name)) {
+          run('UPDATE exercise_muscles SET points = ? WHERE exercise_id = ? AND muscle = ?', m.points, ex.id, m.muscle);
+        }
+      }
+      setSetting('muscle_defaults_version', MUSCLE_DEFAULTS_VERSION);
+    });
+  }
+
+  // After an exercise's target/secondary list changes: drop muscles no longer listed,
+  // add new ones with default scores, keep scores already set for muscles still listed.
+  // The target always scores at least the default target points.
+  function syncExerciseMuscles(exerciseId) {
+    const ex = get('SELECT name, target, secondary_muscles FROM exercises WHERE id = ?', exerciseId);
+    if (!ex) return;
+    const defaults = defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]'), ex.name);
+    const current = new Map(all('SELECT muscle, points FROM exercise_muscles WHERE exercise_id = ?', exerciseId).map((r) => [r.muscle, r.points]));
+    const target = defaults[0] && defaults[0].muscle;
+    const next = defaults.map((d) => ({
+      muscle: d.muscle,
+      points: current.has(d.muscle) ? (d.muscle === target ? Math.max(current.get(d.muscle), d.points) : current.get(d.muscle)) : d.points,
+    }));
+    run('DELETE FROM exercise_muscles WHERE exercise_id = ?', exerciseId);
+    insertMuscles(exerciseId, next);
+  }
+
+  function getExerciseMuscles(exerciseId) {
+    const rows = all('SELECT muscle, points FROM exercise_muscles WHERE exercise_id = ? ORDER BY position', exerciseId);
+    if (rows.length) return rows.map((r) => ({ muscle: r.muscle, points: r.points }));
+    const ex = get('SELECT name, target, secondary_muscles FROM exercises WHERE id = ?', exerciseId);
+    return ex ? defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]'), ex.name) : [];
+  }
+
+  // Update scores for muscles the exercise already lists. Unknown muscles are rejected.
+  function setExerciseMuscles(exerciseId, scores) {
+    const known = new Set(getExerciseMuscles(exerciseId).map((m) => m.muscle));
+    if (!known.size) throw new Error('Exercise not found');
+    tx(() => {
+      if (!get('SELECT 1 FROM exercise_muscles WHERE exercise_id = ? LIMIT 1', exerciseId)) insertMuscles(exerciseId, getExerciseMuscles(exerciseId));
+      for (const { muscle, points } of scores) {
+        if (!known.has(muscle)) throw new Error(`“${muscle}” isn’t listed for this exercise`);
+        const p = Number(points);
+        if (!Number.isInteger(p) || p < 0 || p > MAX_POINTS) throw new Error(`Score must be a whole number from 0 to ${MAX_POINTS}`);
+        run('UPDATE exercise_muscles SET points = ? WHERE exercise_id = ? AND muscle = ?', p, exerciseId, muscle);
+      }
+    });
+    return getExerciseMuscles(exerciseId);
+  }
+
+  function resetExerciseMuscles(exerciseId) {
+    tx(() => {
+      run('DELETE FROM exercise_muscles WHERE exercise_id = ?', exerciseId);
+      syncExerciseMuscles(exerciseId);
+    });
+    return getExerciseMuscles(exerciseId);
   }
 
   function deleteCustomExercise(id) {
@@ -570,6 +726,26 @@ function createRepo(db) {
     );
   }
 
+  // One row per exercise per workout with its completed working-set count, since a date.
+  // Includes the workout in progress so today's ticked-off sets show up immediately.
+  function exerciseLog(isoStart) {
+    const muscleCache = new Map();
+    return all(
+      `SELECT w.id AS workout_id, w.started_at, e.id AS exercise_id, e.body_part, e.target, e.secondary_muscles,
+              COUNT(s.id) AS sets
+         FROM workouts w JOIN workout_exercises we ON we.workout_id = w.id
+         JOIN exercises e ON e.id = we.exercise_id
+         JOIN sets s ON s.workout_exercise_id = we.id
+        WHERE w.started_at >= ? AND ${WORKING_SQL}
+        GROUP BY we.id ORDER BY w.started_at`,
+      isoStart,
+    ).map((r) => {
+      // One muscle-score lookup per distinct exercise, not per row.
+      if (!muscleCache.has(r.exercise_id)) muscleCache.set(r.exercise_id, getExerciseMuscles(r.exercise_id));
+      return { ...r, secondary_muscles: JSON.parse(r.secondary_muscles || '[]'), muscles: muscleCache.get(r.exercise_id) };
+    });
+  }
+
   function backupTo(file) {
     if (fs.existsSync(file)) fs.unlinkSync(file);
     db.prepare('VACUUM INTO ?').run(file);
@@ -580,12 +756,13 @@ function createRepo(db) {
     getSetting, setSetting, displayUnit,
     exerciseCount, searchExercises, filterOptions, getExercise, getMedia, saveMedia,
     createCustomExercise, updateCustomExercise, deleteCustomExercise, nextCustomId,
+    ensureExerciseMuscles, syncExerciseMuscles, getExerciseMuscles, setExerciseMuscles, resetExerciseMuscles,
     listRoutines, getRoutine, saveRoutine, deleteRoutine,
     lastUnitFor, previousSets, startWorkout, inProgressWorkout, getWorkout, updateWorkout,
     finishWorkout, deleteWorkout, listWorkouts, workoutToRoutine,
     addWorkoutExercise, removeWorkoutExercise, moveWorkoutExercise, updateWorkoutExercise,
     addSet, updateSet, setExerciseUnit, deleteSet,
-    exerciseSets, exercisesWithHistory, statsSince, totals, workoutVolumes, bodyPartSets,
+    exerciseSets, exercisesWithHistory, statsSince, totals, workoutVolumes, bodyPartSets, exerciseLog,
     backupTo, close: () => db.close(),
   };
 }

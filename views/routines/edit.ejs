@@ -28,7 +28,7 @@
   </form>
 
   <% if (routine.id) { %>
-    <form method="post" action="/routines/<%= routine.id %>/delete" style="margin-top:40px" onsubmit="return confirm('Delete this routine? Workouts you did with it are kept.')">
+    <form method="post" action="/routines/<%= routine.id %>/delete" style="margin-top:40px" data-confirm-title="Delete this routine?" data-confirm="Workouts you already did with it stay in your history.">
       <button class="btn btn-danger"><%- icon('trash') %> Delete routine</button>
     </form>
   <% } %>

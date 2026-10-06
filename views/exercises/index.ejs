@@ -1,5 +1,5 @@
 <%- include('../partials/head') %>
-<div class="page">
+<div class="page page-wide">
   <div class="page-head">
     <div>
       <h1>Exercises</h1>
@@ -8,77 +8,108 @@
     <a class="btn" href="/exercises/new<%= filters.q ? '?name=' + encodeURIComponent(filters.q) : '' %>"><%- icon('plus') %> Add exercise</a>
   </div>
 
-  <form class="filters" method="get" action="/exercises" role="search">
-    <div class="search">
-      <label class="sr-only" for="q">Search exercises</label>
-      <input id="q" type="search" name="q" value="<%= filters.q %>" placeholder="Search, e.g. incline dumbbell press" autocomplete="off">
-    </div>
-    <div>
-      <label class="sr-only" for="body_part">Body part</label>
-      <select id="body_part" name="body_part" onchange="this.form.submit()">
-        <option value="">Any body part</option>
-        <% for (const o of options.body_parts) { %><option value="<%= o %>" <%= o === filters.body_part ? 'selected' : '' %>><%= fmt.cap(o) %></option><% } %>
-      </select>
-    </div>
-    <div>
-      <label class="sr-only" for="equipment">Equipment</label>
-      <select id="equipment" name="equipment" onchange="this.form.submit()">
-        <option value="">Any equipment</option>
-        <% for (const o of options.equipment) { %><option value="<%= o %>" <%= o === filters.equipment ? 'selected' : '' %>><%= fmt.cap(o) %></option><% } %>
-      </select>
-    </div>
-    <div>
-      <label class="sr-only" for="target">Target muscle</label>
-      <select id="target" name="target" onchange="this.form.submit()">
-        <option value="">Any target muscle</option>
-        <% for (const o of options.targets) { %><option value="<%= o %>" <%= o === filters.target ? 'selected' : '' %>><%= fmt.cap(o) %></option><% } %>
-      </select>
-    </div>
-    <% if (filters.custom) { %><input type="hidden" name="custom" value="1"><% } %>
-  </form>
+  <div class="lib-layout">
+    <div class="lib-main">
+      <form class="filters" id="ex-filters" method="get" action="/exercises" role="search">
+        <div class="search search-box">
+          <%- icon('search') %>
+          <label class="sr-only" for="q">Search exercises</label>
+          <input id="q" type="search" name="q" value="<%= filters.q %>" placeholder="Search, e.g. incline dumbbell press" autocomplete="off">
+        </div>
+        <div>
+          <label class="sr-only" for="body_part">Body part</label>
+          <select id="body_part" name="body_part" class="<%= filters.body_part ? 'is-set' : '' %>">
+            <option value="">Any body part</option>
+            <% for (const o of options.body_parts) { %><option value="<%= o %>" <%= o === filters.body_part ? 'selected' : '' %>><%= fmt.cap(o) %></option><% } %>
+          </select>
+        </div>
+        <div>
+          <label class="sr-only" for="equipment">Equipment</label>
+          <select id="equipment" name="equipment" class="<%= filters.equipment ? 'is-set' : '' %>">
+            <option value="">Any equipment</option>
+            <% for (const o of options.equipment) { %><option value="<%= o %>" <%= o === filters.equipment ? 'selected' : '' %>><%= fmt.cap(o) %></option><% } %>
+          </select>
+        </div>
+        <div>
+          <label class="sr-only" for="target">Target muscle</label>
+          <select id="target" name="target" class="<%= filters.target ? 'is-set' : '' %>">
+            <option value="">Any target muscle</option>
+            <% for (const o of options.targets) { %><option value="<%= o %>" <%= o === filters.target ? 'selected' : '' %>><%= fmt.cap(o) %></option><% } %>
+          </select>
+        </div>
+        <input type="hidden" name="muscles" value="<%= filters.muscles %>">
+        <input type="hidden" name="custom" value="<%= filters.custom ? '1' : '' %>">
+        <noscript><button class="btn">Search</button></noscript>
+      </form>
 
-  <div class="result-meta">
-    <span><%= fmt.num(total) %> <%= total === 1 ? 'exercise' : 'exercises' %><%= filters.custom ? ' you added' : '' %></span>
-    <span class="btn-row">
-      <% if (filters.custom) { %>
-        <a class="btn btn-sm btn-quiet" href="/exercises">Show all</a>
-      <% } else { %>
-        <a class="btn btn-sm btn-quiet" href="/exercises?custom=1">Only mine</a>
-      <% } %>
-      <% if (filters.q || filters.body_part || filters.equipment || filters.target) { %>
-        <a class="btn btn-sm btn-quiet" href="/exercises<%= filters.custom ? '?custom=1' : '' %>">Clear filters</a>
-      <% } %>
-    </span>
+      <div id="results" aria-live="polite">
+        <div class="result-meta">
+          <span><%= fmt.num(total) %> <%= total === 1 ? 'exercise' : 'exercises' %><%= filters.custom ? ' you added' : '' %><%= regions.length && !partial ? (regions.length === 1 ? ' that work ' : ' that work all of ') + regions.map((r) => r.label.toLowerCase()).join(', ') : '' %></span>
+          <span class="btn-row">
+            <% if (filters.custom) { %>
+              <a class="btn btn-sm btn-quiet" data-swap href="/exercises">Show all</a>
+            <% } else { %>
+              <a class="btn btn-sm btn-quiet" data-swap href="/exercises?custom=1">Only mine</a>
+            <% } %>
+            <% if (filters.q || filters.body_part || filters.equipment || filters.target || filters.muscles) { %>
+              <a class="btn btn-sm btn-quiet" data-swap href="/exercises<%= filters.custom ? '?custom=1' : '' %>">Clear filters</a>
+            <% } %>
+          </span>
+        </div>
+
+        <% if (partial) { %>
+          <p class="partial-note">No exercise works all of <%= regions.map((r) => r.label.toLowerCase()).join(', ') %>. These work the most of them.</p>
+        <% } %>
+
+        <% if (!rows.length) { %>
+          <div class="empty">
+            <h3>Nothing matches <%= filters.q ? '“' + filters.q + '”' : 'those filters' %></h3>
+            <p><%= regions.length ? 'Try fewer muscles or filters, or add the exercise yourself.' : 'Try fewer words, or add it yourself if it isn’t in the library.' %></p>
+            <div class="btn-row"><a class="btn btn-go" href="/exercises/new<%= filters.q ? '?name=' + encodeURIComponent(filters.q) : '' %>"><%- icon('plus') %> Add “<%= filters.q || 'new exercise' %>”</a></div>
+          </div>
+        <% } else { %>
+          <ul class="ex-grid">
+            <% for (const ex of rows) { %>
+              <li>
+                <a class="ex-tile" href="/exercises/<%= ex.id %>">
+                  <div class="ex-thumb">
+                    <% if (ex.has_image) { %><img src="/media/<%= ex.id %>/image" alt="" loading="lazy" width="180" height="180"><% } else { %><span class="ph"><%= ex.name.charAt(0).toUpperCase() %></span><% } %>
+                  </div>
+                  <strong><%= ex.name %></strong>
+                  <span><%= fmt.cap(ex.target) %> · <%= ex.equipment %><% if (ex.times_done) { %> · done <%= ex.times_done %>×<% } %></span>
+                  <% if (regions.length > 1 && ex.hits < regions.length) { %><span class="chip">Works <%= ex.hits %> of <%= regions.length %></span><% } %>
+                  <% if (ex.is_custom) { %><span><span class="chip chip-custom">Yours</span></span><% } %>
+                </a>
+              </li>
+            <% } %>
+          </ul>
+          <% if (pages > 1) { %>
+            <nav class="pager" aria-label="Pages">
+              <% if (page > 1) { %><a class="btn" data-swap href="/exercises?<%= qs(page - 1) %>">Previous</a><% } else { %><span></span><% } %>
+              <span class="muted">Page <%= page %> of <%= pages %></span>
+              <% if (page < pages) { %><a class="btn" data-swap href="/exercises?<%= qs(page + 1) %>">Next</a><% } else { %><span></span><% } %>
+            </nav>
+          <% } %>
+        <% } %>
+      </div>
+    </div>
+
+    <aside class="panel lib-body" id="muscle-picker" aria-labelledby="picker-title">
+      <div class="lib-body-head">
+        <h2 id="picker-title">Muscles</h2>
+        <div class="chart-tabs" role="group" aria-label="Body view">
+          <button type="button" data-side="front" aria-pressed="true">Front</button>
+          <button type="button" data-side="back" aria-pressed="false">Back</button>
+        </div>
+      </div>
+      <p class="muted small">Tap muscles to pick them. With more than one, you get exercises that work all of them.</p>
+      <div class="pick-fig" data-fig="front"><%- figures.front %></div>
+      <div class="pick-fig" data-fig="back" hidden><%- figures.back %></div>
+      <div class="picked" id="picked">
+        <% for (const r of regions) { %><button type="button" class="chip picked-chip" data-region="<%= r.id %>" aria-label="Remove <%= r.label %>"><%= r.label %> <%- icon('x') %></button><% } %>
+      </div>
+      <button type="button" class="btn btn-sm btn-quiet" id="picked-clear" <%= regions.length ? '' : 'hidden' %>>Clear muscles</button>
+    </aside>
   </div>
-
-  <% if (!rows.length) { %>
-    <div class="empty">
-      <h3>Nothing matches “<%= filters.q || 'those filters' %>”</h3>
-      <p>Try fewer words, or add it yourself if it isn’t in the library.</p>
-      <div class="btn-row"><a class="btn btn-go" href="/exercises/new<%= filters.q ? '?name=' + encodeURIComponent(filters.q) : '' %>"><%- icon('plus') %> Add “<%= filters.q || 'new exercise' %>”</a></div>
-    </div>
-  <% } else { %>
-    <ul class="ex-grid">
-      <% for (const ex of rows) { %>
-        <li>
-          <a class="ex-tile" href="/exercises/<%= ex.id %>">
-            <div class="ex-thumb">
-              <% if (ex.has_image) { %><img src="/media/<%= ex.id %>/image" alt="" loading="lazy" width="180" height="180"><% } else { %><span class="ph"><%= ex.name.charAt(0).toUpperCase() %></span><% } %>
-            </div>
-            <strong><%= ex.name %></strong>
-            <span><%= fmt.cap(ex.target) %> · <%= ex.equipment %><% if (ex.times_done) { %> · done <%= ex.times_done %>×<% } %></span>
-            <% if (ex.is_custom) { %><span><span class="chip chip-custom">Yours</span></span><% } %>
-          </a>
-        </li>
-      <% } %>
-    </ul>
-    <% if (pages > 1) { %>
-      <nav class="pager" aria-label="Pages">
-        <% if (page > 1) { %><a class="btn" href="/exercises?<%= qs(page - 1) %>">Previous</a><% } else { %><span></span><% } %>
-        <span class="muted">Page <%= page %> of <%= pages %></span>
-        <% if (page < pages) { %><a class="btn" href="/exercises?<%= qs(page + 1) %>">Next</a><% } else { %><span></span><% } %>
-      </nav>
-    <% } %>
-  <% } %>
 </div>
 <%- include('../partials/foot') %>

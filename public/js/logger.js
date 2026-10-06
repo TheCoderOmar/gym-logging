@@ -338,7 +338,7 @@
       liftsEl.querySelector(`.lift[data-we="${we.id}"]`).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     } else if (act === 'remove') {
       const logged = we.sets.filter((s) => s.done).length;
-      if (logged && !confirm(`Remove ${we.name}? Its ${logged} logged ${logged === 1 ? 'set' : 'sets'} will be deleted.`)) return;
+      if (logged && !(await confirmDialog({ title: `Remove ${we.name}?`, message: `Its ${logged} logged ${logged === 1 ? 'set is' : 'sets are'} deleted too.`, confirmLabel: 'Remove' }))) return;
       await api('DELETE', `/workout-exercises/${we.id}`);
       state.workout.exercises.splice(state.workout.exercises.indexOf(we), 1);
       render();
@@ -373,10 +373,15 @@
   if (finishBtn) {
     finishBtn.addEventListener('click', async () => {
       const done = state.workout.exercises.reduce((n, we) => n + we.sets.filter((s) => s.done).length, 0);
-      const msg = done
-        ? `Finish this workout with ${done} completed ${done === 1 ? 'set' : 'sets'}? Empty sets are removed.`
-        : 'No sets are ticked off yet. Finish anyway?';
-      if (!confirm(msg)) return;
+      const ok = await confirmDialog({
+        title: 'Finish this workout?',
+        message: done
+          ? `You completed ${done} ${done === 1 ? 'set' : 'sets'}. Sets you left empty are removed.`
+          : 'No sets are ticked off yet. Sets you left empty are removed.',
+        confirmLabel: 'Finish workout',
+        danger: false,
+      });
+      if (!ok) return;
       clearTimeout(metaTimer);
       await Promise.all([flushAll(), saveMeta()]);
       const res = await api('POST', `/workouts/${workoutId}/finish`);
