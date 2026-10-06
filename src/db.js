@@ -3,7 +3,8 @@ const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { KG_PER_LB, convert, isUnit } = require('./lib/units');
 
-const DEFAULT_PATH = path.join(__dirname, '..', 'db', 'gym.sqlite');
+// GYM_DB lets you point the app at another database file (e.g. a demo copy).
+const DEFAULT_PATH = process.env.GYM_DB || path.join(__dirname, '..', 'db', 'gym.sqlite');
 const SCHEMA = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 
 // Weight of a set in kg, as a SQL expression over the `sets` table alias `s`.
@@ -570,6 +571,21 @@ function createRepo(db) {
     );
   }
 
+  // One row per exercise per workout with its completed working-set count, since a date.
+  // Includes the workout in progress so today's ticked-off sets show up immediately.
+  function exerciseLog(isoStart) {
+    return all(
+      `SELECT w.id AS workout_id, w.started_at, e.id AS exercise_id, e.body_part, e.target, e.secondary_muscles,
+              COUNT(s.id) AS sets
+         FROM workouts w JOIN workout_exercises we ON we.workout_id = w.id
+         JOIN exercises e ON e.id = we.exercise_id
+         JOIN sets s ON s.workout_exercise_id = we.id
+        WHERE w.started_at >= ? AND ${WORKING_SQL}
+        GROUP BY we.id ORDER BY w.started_at`,
+      isoStart,
+    ).map((r) => ({ ...r, secondary_muscles: JSON.parse(r.secondary_muscles || '[]') }));
+  }
+
   function backupTo(file) {
     if (fs.existsSync(file)) fs.unlinkSync(file);
     db.prepare('VACUUM INTO ?').run(file);
@@ -585,7 +601,7 @@ function createRepo(db) {
     finishWorkout, deleteWorkout, listWorkouts, workoutToRoutine,
     addWorkoutExercise, removeWorkoutExercise, moveWorkoutExercise, updateWorkoutExercise,
     addSet, updateSet, setExerciseUnit, deleteSet,
-    exerciseSets, exercisesWithHistory, statsSince, totals, workoutVolumes, bodyPartSets,
+    exerciseSets, exercisesWithHistory, statsSince, totals, workoutVolumes, bodyPartSets, exerciseLog,
     backupTo, close: () => db.close(),
   };
 }
