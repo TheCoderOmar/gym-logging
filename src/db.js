@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { KG_PER_LB, convert, isUnit } = require('./lib/units');
-const { defaultMusclePoints, legacyMusclePoints, MAX_POINTS, MUSCLE_DEFAULTS_VERSION } = require('./lib/muscles');
+const { defaultMusclePoints, legacyMusclePoints, musclesInRegion, REGIONS, MAX_POINTS, MUSCLE_DEFAULTS_VERSION } = require('./lib/muscles');
 
 // GYM_DB lets you point the app at another database file (e.g. a demo copy).
 const DEFAULT_PATH = process.env.GYM_DB || path.join(__dirname, '..', 'db', 'gym.sqlite');
@@ -74,7 +74,12 @@ function createRepo(db) {
     return get('SELECT COUNT(*) AS n FROM exercises').n;
   }
 
-  function searchExercises({ q = '', body_part = '', equipment = '', target = '', custom = false, limit = 60, offset = 0 } = {}) {
+  /**
+   * Search the library. `regions` (heat-map region ids) keeps exercises that work every one
+   * of them (score > 0), best combined score first. If none work them all, falls back to the
+   * exercises that work the most of them and sets `partial`.
+   */
+  function searchExercises({ q = '', body_part = '', equipment = '', target = '', custom = false, regions = [], limit = 60, offset = 0 } = {}) {
     const where = [];
     const params = [];
     for (const word of q.trim().toLowerCase().split(/\s+/).filter(Boolean)) {
@@ -86,19 +91,63 @@ function createRepo(db) {
     if (target) { where.push('e.target = ?'); params.push(target); }
     if (custom) where.push('e.is_custom = 1');
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    const total = get(`SELECT COUNT(*) AS n FROM exercises e ${whereSql}`, ...params).n;
-    // Exercises you've actually done float to the top, then alphabetical.
-    const rows = all(
-      `SELECT e.id, e.name, e.body_part, e.equipment, e.target, e.is_custom,
-              (SELECT COUNT(*) FROM workout_exercises we WHERE we.exercise_id = e.id) AS times_done,
-              (m.image IS NOT NULL) AS has_image
-         FROM exercises e LEFT JOIN exercise_media m ON m.exercise_id = e.id
-         ${whereSql}
-        ORDER BY times_done > 0 DESC, e.name
-        LIMIT ? OFFSET ?`,
-      ...params, limit, offset,
-    );
-    return { total, rows };
+
+    const valid = new Set(REGIONS.map((r) => r.id));
+    regions = [...new Set(regions)].filter((r) => valid.has(r));
+    if (!regions.length) {
+      const total = get(`SELECT COUNT(*) AS n FROM exercises e ${whereSql}`, ...params).n;
+      // Exercises you've actually done float to the top, then alphabetical.
+      const rows = all(
+        `SELECT e.id, e.name, e.body_part, e.equipment, e.target, e.is_custom,
+                (SELECT COUNT(*) FROM workout_exercises we WHERE we.exercise_id = e.id) AS times_done,
+                (m.image IS NOT NULL) AS has_image
+           FROM exercises e LEFT JOIN exercise_media m ON m.exercise_id = e.id
+           ${whereSql}
+          ORDER BY times_done > 0 DESC, e.name
+          LIMIT ? OFFSET ?`,
+        ...params, limit, offset,
+      );
+      return { total, rows, partial: false };
+    }
+
+    // One column per selected region: the exercise's best score for any muscle in it (NULL if none).
+    const regionCols = [];
+    const regionParams = [];
+    regions.forEach((r, i) => {
+      const names = musclesInRegion(r);
+      regionCols.push(
+        `(SELECT MAX(em.points) FROM exercise_muscles em
+           WHERE em.exercise_id = e.id AND em.points > 0 AND em.muscle IN (${names.map(() => '?').join(', ')})) AS r${i}`,
+      );
+      regionParams.push(...names);
+    });
+    const hits = regions.map((_, i) => `(r${i} IS NOT NULL)`).join(' + ');
+    const score = regions.map((_, i) => `COALESCE(r${i}, 0)`).join(' + ');
+    const inner = `
+      SELECT e.id, e.name, e.body_part, e.equipment, e.target, e.is_custom,
+             (SELECT COUNT(*) FROM workout_exercises we WHERE we.exercise_id = e.id) AS times_done,
+             (m.image IS NOT NULL) AS has_image,
+             ${regionCols.join(',\n             ')}
+        FROM exercises e LEFT JOIN exercise_media m ON m.exercise_id = e.id
+        ${whereSql}`;
+    const scored = `SELECT *, ${hits} AS hits, ${score} AS score FROM (${inner})`;
+    const run = (minHits) => ({
+      total: get(`SELECT COUNT(*) AS n FROM (${scored}) WHERE hits >= ?`, ...regionParams, ...params, minHits).n,
+      rows: all(
+        `SELECT * FROM (${scored}) WHERE hits >= ?
+          ORDER BY hits DESC, score DESC, times_done > 0 DESC, name
+          LIMIT ? OFFSET ?`,
+        ...regionParams, ...params, minHits, limit, offset,
+      ),
+    });
+
+    let result = run(regions.length);
+    let partial = false;
+    if (!result.total && regions.length > 1) {
+      result = run(1);
+      partial = result.total > 0;
+    }
+    return { ...result, partial };
   }
 
   function filterOptions() {

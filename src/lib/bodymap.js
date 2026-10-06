@@ -51,26 +51,43 @@ function describe(st) {
   return `${st.label}: trained ${when}, ${st.sets} ${st.sets === 1 ? 'set' : 'sets'} (score ${st.points})`;
 }
 
-function figure(view, shapes, status) {
+// Draw one figure. `decorate(regionId)` returns { cls, attrs, title } for each muscle group.
+function figure(view, shapes, decorate, idPrefix = 'fig') {
   const regions = Object.entries(shapes)
     .map(([id, paths]) => {
-      const st = status[id];
+      const { cls = '', attrs = '', title = '' } = decorate(id);
       const d = paths.map((p) => `<path d="${p}"/>`).join('');
-      return `<g class="muscle b-${st.bucket} i-${st.intensity}" data-region="${id}" tabindex="0" role="img" aria-label="${esc(describe(st))}"><title>${esc(describe(st))}</title>${mirror(d)}</g>`;
+      return `<g class="muscle ${cls}" data-region="${id}" ${attrs}><title>${esc(title)}</title>${mirror(d)}</g>`;
     })
     .join('');
-  return `<svg class="body-fig" viewBox="20 0 160 402" aria-labelledby="fig-${view}">
-    <title id="fig-${view}">${view === 'front' ? 'Front' : 'Back'} of body</title>
+  return `<svg class="body-fig" viewBox="20 0 160 402" aria-labelledby="${idPrefix}-${view}">
+    <title id="${idPrefix}-${view}">${view === 'front' ? 'Front' : 'Back'} of body</title>
     <g class="body-base">${BASE_CENTER.join('')}${mirror(BASE_HALF.join(''))}</g>
     ${regions}
   </svg>`;
 }
 
+// Home: muscles coloured by how recently they were trained.
 function bodyMap(status) {
-  return {
-    front: figure('front', FRONT, status),
-    back: figure('back', BACK, status),
+  const decorate = (id) => {
+    const st = status[id];
+    const text = describe(st);
+    return { cls: `b-${st.bucket} i-${st.intensity}`, attrs: `tabindex="0" role="img" aria-label="${esc(text)}"`, title: text };
   };
+  return { front: figure('front', FRONT, decorate), back: figure('back', BACK, decorate) };
 }
 
-module.exports = { bodyMap, describe };
+// Exercise library: muscles you can click to filter by. `selected` is a Set of region ids.
+function muscleFilterMap(selected, labels) {
+  const decorate = (id) => {
+    const on = selected.has(id);
+    return {
+      cls: `pick${on ? ' is-on' : ''}`,
+      attrs: `tabindex="0" role="checkbox" aria-checked="${on}" aria-label="${esc(labels[id])}"`,
+      title: labels[id],
+    };
+  };
+  return { front: figure('front', FRONT, decorate, 'pick'), back: figure('back', BACK, decorate, 'pick') };
+}
+
+module.exports = { bodyMap, muscleFilterMap, describe };

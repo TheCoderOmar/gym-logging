@@ -27,6 +27,78 @@
 
   function markSet() {
     form.querySelectorAll('select').forEach((s) => s.classList.toggle('is-set', !!s.value));
+    markPicker();
+  }
+
+  /* ---------- body figure muscle picker ---------- */
+
+  const picker = document.getElementById('muscle-picker');
+  const musclesInput = form.elements.muscles;
+  const pickedEl = document.getElementById('picked');
+  const clearBtn = document.getElementById('picked-clear');
+  const selected = () => (musclesInput.value ? musclesInput.value.split(',') : []);
+  const labelOf = (id) => picker.querySelector(`.muscle[data-region="${id}"]`)?.getAttribute('aria-label') || id;
+
+  function markPicker() {
+    if (!picker) return;
+    const on = new Set(selected());
+    picker.querySelectorAll('.muscle.pick').forEach((g) => {
+      const yes = on.has(g.dataset.region);
+      g.classList.toggle('is-on', yes);
+      g.setAttribute('aria-checked', String(yes));
+    });
+    pickedEl.innerHTML = '';
+    for (const id of on) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip picked-chip';
+      chip.dataset.region = id;
+      chip.setAttribute('aria-label', `Remove ${labelOf(id)}`);
+      chip.innerHTML = `${labelOf(id)} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>`;
+      pickedEl.appendChild(chip);
+    }
+    clearBtn.hidden = !on.size;
+  }
+
+  function setMuscles(list) {
+    musclesInput.value = list.join(',');
+    markPicker();
+    load(urlFromForm());
+  }
+
+  function toggleMuscle(id) {
+    const list = selected();
+    setMuscles(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  }
+
+  if (picker) {
+    picker.addEventListener('click', (e) => {
+      const g = e.target.closest('.muscle.pick');
+      if (g) return toggleMuscle(g.dataset.region);
+      const chip = e.target.closest('.picked-chip');
+      if (chip) return toggleMuscle(chip.dataset.region);
+    });
+    picker.addEventListener('keydown', (e) => {
+      const g = e.target.closest('.muscle.pick');
+      if (g && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        toggleMuscle(g.dataset.region);
+      }
+    });
+    clearBtn.addEventListener('click', () => setMuscles([]));
+
+    // Front / back toggle, remembered per browser.
+    const sideButtons = picker.querySelectorAll('[data-side]');
+    const showSide = (side) => {
+      sideButtons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.side === side)));
+      picker.querySelectorAll('[data-fig]').forEach((f) => (f.hidden = f.dataset.fig !== side));
+      try { localStorage.setItem('pickerSide', side); } catch (err) { /* private mode */ }
+    };
+    sideButtons.forEach((b) => b.addEventListener('click', () => showSide(b.dataset.side)));
+    let side = 'front';
+    try { side = localStorage.getItem('pickerSide') === 'back' ? 'back' : 'front'; } catch (err) { /* private mode */ }
+    showSide(side);
+    markPicker();
   }
 
   async function load(url, { scroll = false, typing = false } = {}) {

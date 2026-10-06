@@ -186,3 +186,32 @@ test('muscle defaults upgrade: unedited exercises move to the new rule, edited o
   assert.deepEqual(repo.getExerciseMuscles('0002').map((m) => m.points), [3, 1, 3]); // hand-edited, kept
   assert.equal(repo.getSetting('muscle_defaults_version'), '2');
 });
+
+test('search by muscles: exercises working all picked muscles, best score first, closest matches as fallback', () => {
+  const repo = openDb(':memory:');
+  const ins = repo.db.prepare('INSERT INTO exercises (id, name, body_part, equipment, target, secondary_muscles) VALUES (?, ?, ?, ?, ?, ?)');
+  ins.run('0001', 'pull-up', 'back', 'body weight', 'lats', JSON.stringify(['biceps', 'forearms']));
+  ins.run('0002', 'barbell curl', 'upper arms', 'barbell', 'biceps', JSON.stringify(['forearms']));
+  ins.run('0003', 'straight arm pulldown', 'back', 'cable', 'lats', JSON.stringify(['triceps']));
+  ins.run('0004', 'calf raise', 'lower legs', 'body weight', 'calves', JSON.stringify([]));
+  repo.ensureExerciseMuscles();
+
+  const lats = repo.searchExercises({ regions: ['lats'] });
+  assert.equal(lats.total, 2);
+  assert.equal(lats.partial, false);
+
+  const both = repo.searchExercises({ regions: ['lats', 'biceps'] });
+  assert.deepEqual(both.rows.map((r) => r.id), ['0001']); // only the pull-up works both
+  assert.equal(both.rows[0].score, 5); // lats 3 + biceps 2
+
+  const armsFirst = repo.searchExercises({ regions: ['biceps'] });
+  assert.equal(armsFirst.rows[0].id, '0002'); // curls (biceps 3) before pull-ups (biceps 2)
+
+  const none = repo.searchExercises({ regions: ['lats', 'calves'] });
+  assert.equal(none.partial, true); // nothing works both → closest matches
+  assert.equal(none.total, 3);
+
+  repo.setExerciseMuscles('0001', [{ muscle: 'biceps', points: 0 }]); // 0 = doesn't count
+  assert.equal(repo.searchExercises({ regions: ['lats', 'biceps'] }).partial, true);
+  assert.equal(repo.searchExercises({ regions: ['nonsense'] }).total, 4); // unknown regions ignored
+});

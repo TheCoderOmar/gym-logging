@@ -1,7 +1,10 @@
 const express = require('express');
 const multer = require('multer');
 const { sessionSummaries, personalRecords } = require('../lib/stats');
-const { defaultMusclePoints, regionLabelOf, TRAINED_THRESHOLD, MAX_POINTS } = require('../lib/muscles');
+const { defaultMusclePoints, regionLabelOf, TRAINED_THRESHOLD, MAX_POINTS, REGIONS } = require('../lib/muscles');
+const { muscleFilterMap } = require('../lib/bodymap');
+
+const REGION_LABELS = Object.fromEntries(REGIONS.map((r) => [r.id, r.label]));
 
 const PAGE_SIZE = 48;
 
@@ -41,12 +44,17 @@ module.exports = (repo) => {
       equipment: String(req.query.equipment || ''),
       target: String(req.query.target || ''),
       custom: req.query.custom === '1',
+      // Heat-map regions picked on the body figure, comma-separated: ?muscles=lats,biceps
+      muscles: String(req.query.muscles || '').split(',').map((s) => s.trim()).filter((s) => REGION_LABELS[s]).join(','),
     };
-    const { total, rows } = repo.searchExercises({ ...filters, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
+    const regions = filters.muscles ? filters.muscles.split(',') : [];
+    const { total, rows, partial } = repo.searchExercises({ ...filters, regions, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
     const qs = (p) => new URLSearchParams({ ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)), ...(filters.custom ? { custom: '1' } : {}), page: p }).toString();
     res.render('exercises/index', {
       title: 'Exercises',
-      filters, rows, total, page,
+      filters, rows, total, page, partial,
+      regions: regions.map((id) => ({ id, label: REGION_LABELS[id] })),
+      figures: muscleFilterMap(new Set(regions), REGION_LABELS),
       pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
       qs,
       options: repo.filterOptions(),

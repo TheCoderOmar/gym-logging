@@ -407,6 +407,36 @@ a.cell:hover, a.cell:focus-visible { outline: 2px solid var(--iron); outline-off
 }
 
 /* ---------- exercise library ---------- */
+/* library: results on the left, body-figure muscle picker on the right */
+.lib-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; align-items: start; }
+.lib-body { position: sticky; top: 20px; display: grid; gap: 10px; }
+.lib-body-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.lib-body-head h2 { font-size: 1.125rem; }
+.lib-body-head .chart-tabs { margin: 0; flex-wrap: nowrap; }
+.lib-body-head .chart-tabs button { padding: 5px 12px; }
+.pick-fig { display: grid; justify-items: center; }
+.pick-fig[hidden] { display: none; }
+.pick-fig .body-fig { max-width: 210px; max-height: 52vh; }
+.muscle.pick { fill: var(--rule-strong); fill-opacity: 0.55; cursor: pointer; }
+.muscle.pick:hover { fill: var(--plate-blue); fill-opacity: 0.45; }
+.muscle.pick.is-on { fill: var(--plate-blue); fill-opacity: 1; }
+.muscle.pick:focus-visible path { stroke: var(--plate-blue); stroke-width: 2.5; }
+.picked { display: flex; flex-wrap: wrap; gap: 6px; min-height: 0; }
+.picked:empty { display: none; }
+.picked-chip { gap: 4px; border: 0; cursor: pointer; background: color-mix(in srgb, var(--plate-blue) 18%, var(--sheet)); color: var(--iron); font: 700 0.8125rem/1.6 var(--body); }
+.picked-chip svg { width: 12px; height: 12px; }
+.picked-chip:hover { background: color-mix(in srgb, var(--plate-blue) 30%, var(--sheet)); }
+#picked-clear { justify-self: start; }
+.partial-note { margin: -4px 0 14px; padding: 10px 14px; border-left: 3px solid var(--plate-yellow); background: var(--sheet); border-radius: var(--r-sm); color: var(--rubber); font-size: 0.9375rem; }
+.ex-tile .chip { justify-self: start; }
+.lib-main .filters { grid-template-columns: 1.6fr repeat(3, 1fr); }
+@media (max-width: 1400px) { .lib-main .filters { grid-template-columns: repeat(3, 1fr); } .lib-main .filters .search { grid-column: 1 / -1; } }
+@media (max-width: 560px) { .lib-main .filters { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 900px) {
+  .lib-layout { grid-template-columns: 1fr; }
+  .lib-body { position: static; order: -1; }
+  .pick-fig .body-fig { max-height: 300px; }
+}
 .filters { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
 @media (max-width: 760px) { .filters { grid-template-columns: 1fr 1fr; } .filters .search { grid-column: 1 / -1; } }
 .result-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; color: var(--rubber); font-size: 0.9375rem; }

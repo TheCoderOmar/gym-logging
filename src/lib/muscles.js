@@ -52,6 +52,11 @@ function regionOf(name) {
   return NAME_TO_REGION[String(name || '').trim().toLowerCase()] || null;
 }
 
+// All dataset muscle names that count toward a region, e.g. 'shoulders' → ['delts', 'deltoids', …].
+function musclesInRegion(regionId) {
+  return Object.keys(NAME_TO_REGION).filter((name) => NAME_TO_REGION[name] === regionId);
+}
+
 // Heat-map area a muscle name counts toward, e.g. "rear deltoids" → "Shoulders"; null if none.
 function regionLabelOf(name) {
   const id = regionOf(name);
@@ -307,5 +312,5 @@ function trainingCalendar(rows, { year = new Date().getFullYear(), now = new Dat
 module.exports = {
   REGIONS, BUCKETS, EMOJI, AREA_LABEL, TARGET_POINTS, SECONDARY_POINTS, TRAINED_THRESHOLD, MAX_POINTS,
   SYNERGIST_POINTS, MUSCLE_DEFAULTS_VERSION, isCompound, helperPoints, legacyMusclePoints,
-  regionOf, regionLabelOf, defaultMusclePoints, regionPoints, exerciseRegions, recencyBucket, intensity, daysBetween, muscleStatus, exerciseLevel, areaOf, trainingCalendar, dayKey, WEEK_START,
+  regionOf, regionLabelOf, musclesInRegion, defaultMusclePoints, regionPoints, exerciseRegions, recencyBucket, intensity, daysBetween, muscleStatus, exerciseLevel, areaOf, trainingCalendar, dayKey, WEEK_START,
 };
