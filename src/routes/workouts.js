@@ -10,7 +10,7 @@ module.exports = (repo) => {
 
   router.post('/start', (req, res) => {
     const live = repo.inProgressWorkout();
-    if (live) return res.redirect(`/workouts/${live.id}/log?${msg('Finish or discard this workout before starting another')}`);
+    if (live) return res.redirect(`/workouts/${live.id}/log?tone=error&${msg('Finish or discard this workout before starting another')}`);
     const routineId = req.body.routine_id ? Number(req.body.routine_id) : null;
     const id = repo.startWorkout({ routineId });
     res.redirect(`/workouts/${id}/log`);

@@ -105,7 +105,7 @@ module.exports = (repo) => {
       repo.deleteCustomExercise(req.params.id);
       res.redirect(`/exercises?msg=${encodeURIComponent('Exercise deleted')}`);
     } catch (err) {
-      res.redirect(`/exercises/${req.params.id}?msg=${encodeURIComponent(err.message)}`);
+      res.redirect(`/exercises/${req.params.id}?tone=error&msg=${encodeURIComponent(err.message)}`);
     }
   });
 

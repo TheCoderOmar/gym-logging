@@ -10,6 +10,7 @@
   <script>try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
+<div class="toasts" id="toasts" role="status" aria-live="polite"<% if (flash) { %> data-flash="<%= flash %>" data-tone="<%= flashTone %>"<% } %>></div>
 <div class="shell">
   <nav class="rail" aria-label="Main">
     <a class="brand" href="/"><%- brandMark %> Gym Log</a>
@@ -28,4 +29,3 @@
       <a class="brand" href="/"><%- brandMark %> Gym Log</a>
       <a class="icon-btn" href="/settings" aria-label="Settings"><%- icon('settings') %></a>
     </div>
-    <% if (flash) { %><div class="flash" role="status"><%= flash %></div><% } %>
