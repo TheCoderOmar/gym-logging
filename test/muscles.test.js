@@ -97,3 +97,17 @@ test('training calendar: levels and emoji per day', () => {
   assert.equal(yesterday.level, 1);
   assert.equal(days[0].level, 0);
 });
+
+test('default helper scores: 2 for prime movers in compound lifts, 1 otherwise', () => {
+  const pts = (target, secondary, name) => Object.fromEntries(m.defaultMusclePoints(target, secondary, name).map((x) => [x.muscle, x.points]));
+  assert.deepEqual(pts('pectorals', ['triceps', 'shoulders'], 'barbell bench press'), { pectorals: 3, triceps: 2, shoulders: 2 });
+  assert.deepEqual(pts('pectorals', ['shoulders'], 'dumbbell fly'), { pectorals: 3, shoulders: 1 });
+  assert.deepEqual(pts('lats', ['biceps', 'rhomboids', 'rear deltoids', 'forearms'], 'cable pulldown'), { lats: 3, biceps: 2, rhomboids: 2, 'rear deltoids': 2, forearms: 1 });
+  assert.deepEqual(pts('quads', ['hamstrings'], 'lever leg extension'), { quads: 3, hamstrings: 1 });
+  assert.deepEqual(pts('glutes', ['hamstrings', 'lower back'], 'barbell romanian deadlift'), { glutes: 3, hamstrings: 2, 'lower back': 2 });
+  assert.deepEqual(pts('spine', ['glutes', 'hamstrings'], 'hyperextension'), { spine: 3, glutes: 2, hamstrings: 2 });
+  assert.deepEqual(pts('biceps', ['forearms'], 'dumbbell hammer curl'), { biceps: 3, forearms: 2 });
+  assert.deepEqual(pts('biceps', ['forearms'], 'barbell curl'), { biceps: 3, forearms: 1 });
+  assert.deepEqual(pts('abs', ['obliques', 'hip flexors'], 'crunch floor'), { abs: 3, obliques: 2, 'hip flexors': 1 });
+  assert.deepEqual(pts('triceps', ['forearms'], 'cable pushdown'), { triceps: 3, forearms: 1 });
+});

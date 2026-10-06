@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { KG_PER_LB, convert, isUnit } = require('./lib/units');
-const { defaultMusclePoints, MAX_POINTS } = require('./lib/muscles');
+const { defaultMusclePoints, legacyMusclePoints, MAX_POINTS, MUSCLE_DEFAULTS_VERSION } = require('./lib/muscles');
 
 // GYM_DB lets you point the app at another database file (e.g. a demo copy).
 const DEFAULT_PATH = process.env.GYM_DB || path.join(__dirname, '..', 'db', 'gym.sqlite');
@@ -198,26 +198,54 @@ function createRepo(db) {
     });
   }
 
-  // Give every exercise that has no muscle scores yet the defaults (target 3, secondary 1).
+  // Give every exercise that has no muscle scores yet the defaults (see defaultMusclePoints),
+  // and move exercises still on the original 3/1 rule to the current defaults once.
   function ensureExerciseMuscles() {
+    upgradeMuscleDefaults();
     const missing = all(
-      `SELECT id, target, secondary_muscles FROM exercises
+      `SELECT id, name, target, secondary_muscles FROM exercises
         WHERE id NOT IN (SELECT DISTINCT exercise_id FROM exercise_muscles)`,
     );
     if (!missing.length) return 0;
     tx(() => {
-      for (const ex of missing) insertMuscles(ex.id, defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]')));
+      for (const ex of missing) insertMuscles(ex.id, defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]'), ex.name));
     });
     return missing.length;
+  }
+
+  // Exercises whose scores still exactly match the old rule were never edited, so they get
+  // the new defaults. Anything you changed by hand is left alone.
+  function upgradeMuscleDefaults() {
+    if (Number(getSetting('muscle_defaults_version', '1')) >= MUSCLE_DEFAULTS_VERSION) return;
+    const rows = all('SELECT exercise_id, muscle, points FROM exercise_muscles ORDER BY exercise_id, position');
+    const byExercise = new Map();
+    for (const r of rows) {
+      if (!byExercise.has(r.exercise_id)) byExercise.set(r.exercise_id, []);
+      byExercise.get(r.exercise_id).push(`${r.muscle}:${r.points}`);
+    }
+    const exercises = all('SELECT id, name, target, secondary_muscles FROM exercises');
+    tx(() => {
+      for (const ex of exercises) {
+        const saved = byExercise.get(ex.id);
+        if (!saved) continue;
+        const secondary = JSON.parse(ex.secondary_muscles || '[]');
+        const legacy = legacyMusclePoints(ex.target, secondary).map((m) => `${m.muscle}:${m.points}`);
+        if (saved.join('|') !== legacy.join('|')) continue; // edited by hand
+        for (const m of defaultMusclePoints(ex.target, secondary, ex.name)) {
+          run('UPDATE exercise_muscles SET points = ? WHERE exercise_id = ? AND muscle = ?', m.points, ex.id, m.muscle);
+        }
+      }
+      setSetting('muscle_defaults_version', MUSCLE_DEFAULTS_VERSION);
+    });
   }
 
   // After an exercise's target/secondary list changes: drop muscles no longer listed,
   // add new ones with default scores, keep scores already set for muscles still listed.
   // The target always scores at least the default target points.
   function syncExerciseMuscles(exerciseId) {
-    const ex = get('SELECT target, secondary_muscles FROM exercises WHERE id = ?', exerciseId);
+    const ex = get('SELECT name, target, secondary_muscles FROM exercises WHERE id = ?', exerciseId);
     if (!ex) return;
-    const defaults = defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]'));
+    const defaults = defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]'), ex.name);
     const current = new Map(all('SELECT muscle, points FROM exercise_muscles WHERE exercise_id = ?', exerciseId).map((r) => [r.muscle, r.points]));
     const target = defaults[0] && defaults[0].muscle;
     const next = defaults.map((d) => ({
@@ -231,8 +259,8 @@ function createRepo(db) {
   function getExerciseMuscles(exerciseId) {
     const rows = all('SELECT muscle, points FROM exercise_muscles WHERE exercise_id = ? ORDER BY position', exerciseId);
     if (rows.length) return rows.map((r) => ({ muscle: r.muscle, points: r.points }));
-    const ex = get('SELECT target, secondary_muscles FROM exercises WHERE id = ?', exerciseId);
-    return ex ? defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]')) : [];
+    const ex = get('SELECT name, target, secondary_muscles FROM exercises WHERE id = ?', exerciseId);
+    return ex ? defaultMusclePoints(ex.target, JSON.parse(ex.secondary_muscles || '[]'), ex.name) : [];
   }
 
   // Update scores for muscles the exercise already lists. Unknown muscles are rejected.

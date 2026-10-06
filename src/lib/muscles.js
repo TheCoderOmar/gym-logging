@@ -61,9 +61,61 @@ function regionLabelOf(name) {
 // Highest score a muscle can get per set (the editor offers 0–3).
 const MAX_POINTS = 3;
 
-// Default per-set scores for an exercise: target 3, each "also works" muscle 1.
+// Score for a helper muscle that is a prime mover in a compound lift.
+const SYNERGIST_POINTS = 2;
+// Bumped when the default rules change, so unedited exercises pick up the new defaults.
+const MUSCLE_DEFAULTS_VERSION = 2;
+
+// For a target region, the helper regions that do real work in compound lifts.
+const SYNERGISTS = {
+  chest: ['shoulders', 'triceps'],
+  triceps: ['chest', 'shoulders'],
+  shoulders: ['triceps'],
+  lats: ['biceps', 'upper_back', 'shoulders'],
+  upper_back: ['biceps', 'lats', 'shoulders'],
+  quads: ['glutes'],
+  glutes: ['hamstrings', 'quads'],
+  hamstrings: ['glutes', 'lower_back'],
+  lower_back: ['glutes', 'hamstrings'],
+};
+
+const COMPOUND = /\b(press|push[- ]?ups?|dips?|rows?|pull[- ]?ups?|chin[- ]?ups?|pulldown|squats?|lunges?|deadlifts?|thrusts?|bridges?|step[- ]?ups?|split|clean|snatch|swing|jerk|good morning|hyperextension|back extension|leg press|sled|burpee|muscle[- ]up|inverted)\b/;
+const ISOLATION = /\b(fly|flye|flyes|raises?|curls?|kickbacks?|crossover|cross over|pullover|shrugs?|kick|abduction|adduction)\b/;
+
+function isCompound(name) {
+  const n = String(name || '').toLowerCase();
+  const isolatedExtension = /extension/.test(n) && !/(hyper|back) ?extension/.test(n);
+  return COMPOUND.test(n) && !ISOLATION.test(n) && !isolatedExtension;
+}
+
+// How hard a helper muscle works in an exercise: 2 for a prime mover in a compound lift,
+// 1 for stabilisers, grip and isolation moves.
+function helperPoints(exerciseName, targetRegion, helperRegion) {
+  const n = String(exerciseName || '').toLowerCase();
+  if (!helperRegion || helperRegion === targetRegion) return SECONDARY_POINTS;
+  if (/deadlift/.test(n) && ['glutes', 'hamstrings', 'lower_back'].includes(helperRegion)) return SYNERGIST_POINTS;
+  if (targetRegion === 'biceps' && helperRegion === 'forearms' && /\b(hammer|reverse|zottman)\b/.test(n)) return SYNERGIST_POINTS;
+  if (targetRegion === 'abs' && helperRegion === 'obliques') return SYNERGIST_POINTS;
+  if (isCompound(n) && (SYNERGISTS[targetRegion] || []).includes(helperRegion)) return SYNERGIST_POINTS;
+  return SECONDARY_POINTS;
+}
+
+// Default per-set scores for an exercise: target 3, helpers 2 or 1 (see helperPoints).
 // A muscle listed as both target and secondary keeps the target score.
-function defaultMusclePoints(target, secondary = []) {
+function defaultMusclePoints(target, secondary = [], exerciseName = '') {
+  const out = new Map();
+  const t = String(target || '').trim().toLowerCase();
+  if (t) out.set(t, TARGET_POINTS);
+  const targetRegion = regionOf(t);
+  for (const m of secondary) {
+    const name = String(m || '').trim().toLowerCase();
+    if (name && !out.has(name)) out.set(name, helperPoints(exerciseName, targetRegion, regionOf(name)));
+  }
+  return [...out].map(([muscle, points]) => ({ muscle, points }));
+}
+
+// The original rule (target 3, every helper 1), used to spot exercises nobody has edited.
+function legacyMusclePoints(target, secondary = []) {
   const out = new Map();
   const t = String(target || '').trim().toLowerCase();
   if (t) out.set(t, TARGET_POINTS);
@@ -135,7 +187,7 @@ function muscleStatus(rows, now = new Date()) {
   for (const row of rows) {
     if (!row.sets) continue;
     const key = dayKey(row.started_at);
-    const muscles = row.muscles && row.muscles.length ? row.muscles : defaultMusclePoints(row.target, row.secondary_muscles);
+    const muscles = row.muscles && row.muscles.length ? row.muscles : defaultMusclePoints(row.target, row.secondary_muscles, row.name);
     for (const [region, pts] of regionPoints(muscles)) {
       if (!perDay.has(region)) perDay.set(region, new Map());
       const days = perDay.get(region);
@@ -254,5 +306,6 @@ function trainingCalendar(rows, { year = new Date().getFullYear(), now = new Dat
 
 module.exports = {
   REGIONS, BUCKETS, EMOJI, AREA_LABEL, TARGET_POINTS, SECONDARY_POINTS, TRAINED_THRESHOLD, MAX_POINTS,
+  SYNERGIST_POINTS, MUSCLE_DEFAULTS_VERSION, isCompound, helperPoints, legacyMusclePoints,
   regionOf, regionLabelOf, defaultMusclePoints, regionPoints, exerciseRegions, recencyBucket, intensity, daysBetween, muscleStatus, exerciseLevel, areaOf, trainingCalendar, dayKey, WEEK_START,
 };

@@ -139,15 +139,15 @@ test('muscle scores: defaults for every exercise, editable, resettable, synced o
   assert.equal(repo.ensureExerciseMuscles(), 1);
   assert.equal(repo.ensureExerciseMuscles(), 0); // idempotent
   assert.deepEqual(repo.getExerciseMuscles('0150'), [
-    { muscle: 'lats', points: 3 }, { muscle: 'biceps', points: 1 }, { muscle: 'rhomboids', points: 1 }, { muscle: 'rear deltoids', points: 1 },
+    { muscle: 'lats', points: 3 }, { muscle: 'biceps', points: 2 }, { muscle: 'rhomboids', points: 2 }, { muscle: 'rear deltoids', points: 2 },
   ]);
 
-  repo.setExerciseMuscles('0150', [{ muscle: 'rear deltoids', points: 2 }]);
-  assert.equal(repo.getExerciseMuscles('0150').find((m) => m.muscle === 'rear deltoids').points, 2);
+  repo.setExerciseMuscles('0150', [{ muscle: 'rear deltoids', points: 3 }, { muscle: 'biceps', points: 1 }]);
+  assert.equal(repo.getExerciseMuscles('0150').find((m) => m.muscle === 'rear deltoids').points, 3);
   assert.throws(() => repo.setExerciseMuscles('0150', [{ muscle: 'quads', points: 2 }]), /isn’t listed/);
   assert.throws(() => repo.setExerciseMuscles('0150', [{ muscle: 'biceps', points: 4 }]), /0 to 3/);
 
-  // The heat map uses the edited score: 2 sets × 2 points = 4 ≥ 3 → shoulders count as trained.
+  // The heat map uses the edited scores: shoulders 2 sets × 3 = 6, biceps 2 sets × 1 = 2 (< 3).
   const wid = repo.startWorkout();
   const we = repo.addWorkoutExercise(wid, '0150');
   const [s] = repo.getWorkout(wid).exercises[0].sets;
@@ -157,16 +157,32 @@ test('muscle scores: defaults for every exercise, editable, resettable, synced o
   const { muscleStatus } = require('../src/lib/muscles');
   const status = muscleStatus(repo.exerciseLog('2000-01-01'), new Date());
   assert.equal(status.shoulders.bucket, 'today');
-  assert.equal(status.shoulders.points, 4);
+  assert.equal(status.shoulders.points, 6);
   assert.equal(status.biceps.bucket, 'never'); // 2 sets × 1 point
 
-  assert.equal(repo.resetExerciseMuscles('0150').find((m) => m.muscle === 'rear deltoids').points, 1);
+  assert.equal(repo.resetExerciseMuscles('0150').find((m) => m.muscle === 'rear deltoids').points, 2);
 
   // Custom exercise: scores follow edits to its muscle lists, keeping changed scores.
   const id = repo.createCustomExercise({ name: 'Landmine press', body_part: 'shoulders', equipment: 'barbell', target: 'delts', secondary_muscles: 'triceps, upper chest' });
-  repo.setExerciseMuscles(id, [{ muscle: 'triceps', points: 2 }]);
+  repo.setExerciseMuscles(id, [{ muscle: 'triceps', points: 3 }]);
   repo.updateCustomExercise(id, { name: 'Landmine press', body_part: 'shoulders', equipment: 'barbell', target: 'delts', secondary_muscles: 'triceps, serratus anterior' });
   assert.deepEqual(repo.getExerciseMuscles(id), [
-    { muscle: 'delts', points: 3 }, { muscle: 'triceps', points: 2 }, { muscle: 'serratus anterior', points: 1 },
+    { muscle: 'delts', points: 3 }, { muscle: 'triceps', points: 3 }, { muscle: 'serratus anterior', points: 1 },
   ]);
+});
+
+test('muscle defaults upgrade: unedited exercises move to the new rule, edited ones are kept', () => {
+  const repo = openDb(':memory:');
+  const ins = repo.db.prepare('INSERT INTO exercises (id, name, body_part, equipment, target, secondary_muscles) VALUES (?, ?, ?, ?, ?, ?)');
+  ins.run('0001', 'barbell bench press', 'chest', 'barbell', 'pectorals', JSON.stringify(['triceps', 'shoulders']));
+  ins.run('0002', 'dumbbell bench press', 'chest', 'dumbbell', 'pectorals', JSON.stringify(['triceps', 'shoulders']));
+  // Simulate a database from before: old 3/1 scores, one exercise edited by hand.
+  const put = repo.db.prepare('INSERT INTO exercise_muscles (exercise_id, muscle, points, position) VALUES (?, ?, ?, ?)');
+  [['0001', 'pectorals', 3], ['0001', 'triceps', 1], ['0001', 'shoulders', 1], ['0002', 'pectorals', 3], ['0002', 'triceps', 1], ['0002', 'shoulders', 3]]
+    .forEach(([e, m, p], i) => put.run(e, m, p, i % 3));
+  repo.setSetting('muscle_defaults_version', 1);
+  repo.ensureExerciseMuscles();
+  assert.deepEqual(repo.getExerciseMuscles('0001').map((m) => m.points), [3, 2, 2]); // upgraded
+  assert.deepEqual(repo.getExerciseMuscles('0002').map((m) => m.points), [3, 1, 3]); // hand-edited, kept
+  assert.equal(repo.getSetting('muscle_defaults_version'), '2');
 });

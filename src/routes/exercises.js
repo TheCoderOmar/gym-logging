@@ -24,7 +24,7 @@ module.exports = (repo) => {
 
   // Muscle scores for the exercise page: role (target/also works), default and heat-map area.
   function muscleRows(ex) {
-    const defaults = new Map(defaultMusclePoints(ex.target, ex.secondary_muscles).map((d) => [d.muscle, d.points]));
+    const defaults = new Map(defaultMusclePoints(ex.target, ex.secondary_muscles, ex.name).map((d) => [d.muscle, d.points]));
     return repo.getExerciseMuscles(ex.id).map((m) => ({
       ...m,
       role: m.muscle === String(ex.target).toLowerCase() ? 'Target' : 'Also works',
