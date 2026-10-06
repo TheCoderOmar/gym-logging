@@ -193,6 +193,22 @@ textarea { min-height: 96px; resize: vertical; }
 input::placeholder, textarea::placeholder { color: var(--steel); opacity: 0.85; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--plate-blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--plate-blue) 25%, transparent); }
 input[type='file'] { font: inherit; }
+/* dropdowns: custom chevron instead of the browser's, same box as text inputs */
+select {
+  appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 36px; text-overflow: ellipsis;
+  background-image: linear-gradient(45deg, transparent 50%, var(--rubber) 50%), linear-gradient(135deg, var(--rubber) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+select option { background: var(--sheet); color: var(--iron); }
+input:hover, select:hover, textarea:hover { border-color: var(--steel); }
+input:focus:hover, select:focus:hover, textarea:focus:hover { border-color: var(--plate-blue); }
+/* a filter that is narrowing results gets an accent */
+select.is-set { border-color: var(--iron); font-weight: 700; }
+.search-box { position: relative; }
+.search-box svg { position: absolute; left: 12px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--steel); pointer-events: none; }
+.search-box input { padding-left: 40px; }
+input[type='search']::-webkit-search-cancel-button { cursor: pointer; }
 .form-grid { display: grid; gap: 18px; }
 .form-grid .two { display: grid; gap: 18px; grid-template-columns: 1fr 1fr; }
 @media (max-width: 560px) { .form-grid .two { grid-template-columns: 1fr; } }
@@ -406,6 +422,7 @@ a.cell:hover, a.cell:focus-visible { outline: 2px solid var(--iron); outline-off
 .ex-tile strong { font-weight: 700; line-height: 1.25; }
 .ex-tile strong::first-letter { text-transform: uppercase; }
 .ex-tile span { font-size: 0.8125rem; color: var(--rubber); }
+#results[aria-busy='true'] { opacity: 0.6; transition: opacity 0.15s 0.15s; }
 .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 28px; gap: 12px; }
 
 .ex-detail { display: grid; grid-template-columns: 300px 1fr; gap: 36px; align-items: start; }

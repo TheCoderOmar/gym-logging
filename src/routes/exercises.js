@@ -38,6 +38,7 @@ module.exports = (repo) => {
       pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
       qs,
       options: repo.filterOptions(),
+      scripts: ['/js/exercise-library.js'],
     });
   });
 

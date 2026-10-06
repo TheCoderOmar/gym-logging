@@ -8,45 +8,49 @@
     <a class="btn" href="/exercises/new<%= filters.q ? '?name=' + encodeURIComponent(filters.q) : '' %>"><%- icon('plus') %> Add exercise</a>
   </div>
 
-  <form class="filters" method="get" action="/exercises" role="search">
-    <div class="search">
+  <form class="filters" id="ex-filters" method="get" action="/exercises" role="search">
+    <div class="search search-box">
+      <%- icon('search') %>
       <label class="sr-only" for="q">Search exercises</label>
       <input id="q" type="search" name="q" value="<%= filters.q %>" placeholder="Search, e.g. incline dumbbell press" autocomplete="off">
     </div>
     <div>
       <label class="sr-only" for="body_part">Body part</label>
-      <select id="body_part" name="body_part" onchange="this.form.submit()">
+      <select id="body_part" name="body_part" class="<%= filters.body_part ? 'is-set' : '' %>">
         <option value="">Any body part</option>
         <% for (const o of options.body_parts) { %><option value="<%= o %>" <%= o === filters.body_part ? 'selected' : '' %>><%= fmt.cap(o) %></option><% } %>
       </select>
     </div>
     <div>
       <label class="sr-only" for="equipment">Equipment</label>
-      <select id="equipment" name="equipment" onchange="this.form.submit()">
+      <select id="equipment" name="equipment" class="<%= filters.equipment ? 'is-set' : '' %>">
         <option value="">Any equipment</option>
         <% for (const o of options.equipment) { %><option value="<%= o %>" <%= o === filters.equipment ? 'selected' : '' %>><%= fmt.cap(o) %></option><% } %>
       </select>
     </div>
     <div>
       <label class="sr-only" for="target">Target muscle</label>
-      <select id="target" name="target" onchange="this.form.submit()">
+      <select id="target" name="target" class="<%= filters.target ? 'is-set' : '' %>">
         <option value="">Any target muscle</option>
         <% for (const o of options.targets) { %><option value="<%= o %>" <%= o === filters.target ? 'selected' : '' %>><%= fmt.cap(o) %></option><% } %>
       </select>
     </div>
-    <% if (filters.custom) { %><input type="hidden" name="custom" value="1"><% } %>
+    <input type="hidden" name="custom" value="<%= filters.custom ? '1' : '' %>">
+    <noscript><button class="btn">Search</button></noscript>
   </form>
+
+  <div id="results" aria-live="polite">
 
   <div class="result-meta">
     <span><%= fmt.num(total) %> <%= total === 1 ? 'exercise' : 'exercises' %><%= filters.custom ? ' you added' : '' %></span>
     <span class="btn-row">
       <% if (filters.custom) { %>
-        <a class="btn btn-sm btn-quiet" href="/exercises">Show all</a>
+        <a class="btn btn-sm btn-quiet" data-swap href="/exercises">Show all</a>
       <% } else { %>
-        <a class="btn btn-sm btn-quiet" href="/exercises?custom=1">Only mine</a>
+        <a class="btn btn-sm btn-quiet" data-swap href="/exercises?custom=1">Only mine</a>
       <% } %>
       <% if (filters.q || filters.body_part || filters.equipment || filters.target) { %>
-        <a class="btn btn-sm btn-quiet" href="/exercises<%= filters.custom ? '?custom=1' : '' %>">Clear filters</a>
+        <a class="btn btn-sm btn-quiet" data-swap href="/exercises<%= filters.custom ? '?custom=1' : '' %>">Clear filters</a>
       <% } %>
     </span>
   </div>
@@ -74,11 +78,12 @@
     </ul>
     <% if (pages > 1) { %>
       <nav class="pager" aria-label="Pages">
-        <% if (page > 1) { %><a class="btn" href="/exercises?<%= qs(page - 1) %>">Previous</a><% } else { %><span></span><% } %>
+        <% if (page > 1) { %><a class="btn" data-swap href="/exercises?<%= qs(page - 1) %>">Previous</a><% } else { %><span></span><% } %>
         <span class="muted">Page <%= page %> of <%= pages %></span>
-        <% if (page < pages) { %><a class="btn" href="/exercises?<%= qs(page + 1) %>">Next</a><% } else { %><span></span><% } %>
+        <% if (page < pages) { %><a class="btn" data-swap href="/exercises?<%= qs(page + 1) %>">Next</a><% } else { %><span></span><% } %>
       </nav>
     <% } %>
   <% } %>
+  </div>
 </div>
 <%- include('../partials/foot') %>
