@@ -27,10 +27,6 @@ function weekday(iso) {
   return new Date(iso).toLocaleDateString('en-GB', { weekday: 'long' });
 }
 
-function time(iso) {
-  return iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
-}
-
 // "Today", "Yesterday", "Tuesday" (this week), otherwise "12 Mar"
 function relDay(iso) {
   if (!iso) return '';
@@ -39,13 +35,6 @@ function relDay(iso) {
   if (days === 1) return 'Yesterday';
   if (days > 1 && days < 7) return weekday(iso);
   return date(iso);
-}
-
-function duration(startIso, endIso) {
-  if (!startIso || !endIso) return '';
-  const mins = Math.max(0, Math.round((new Date(endIso) - new Date(startIso)) / 60000));
-  if (mins < 60) return `${mins} min`;
-  return `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, '0')}`;
 }
 
 function num(n) {
@@ -64,16 +53,25 @@ function set(s) {
   return `${w} × ${s.reps ?? '—'}`;
 }
 
-// For <input type="datetime-local">
-function localInput(iso) {
+// For <input type="date">: local "YYYY-MM-DD"
+function dayInput(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Workouts are dated, not timed: a day is stored as local noon (safe from midnight DST jumps).
+function dayIso(value = new Date()) {
+  let d = value instanceof Date ? value : null;
+  const m = typeof value === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (m) d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12);
+  if (!d || Number.isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12).toISOString();
 }
 
 function cap(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 }
 
-module.exports = { DAY, startOfDay, startOfWeek, date, weekday, time, relDay, duration, num, weight, set, localInput, cap };
+module.exports = { DAY, startOfDay, startOfWeek, date, weekday, relDay, num, weight, set, dayInput, dayIso, cap };

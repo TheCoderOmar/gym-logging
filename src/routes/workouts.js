@@ -13,7 +13,8 @@ module.exports = (repo) => {
     if (live) return res.redirect(`/workouts/${live.id}/log?tone=error&${msg('Finish or discard this workout before starting another')}`);
     const routineId = req.body.routine_id ? Number(req.body.routine_id) : null;
     const id = repo.startWorkout({ routineId });
-    res.redirect(`/workouts/${id}/log`);
+    // An empty workout opens straight into the exercise picker.
+    res.redirect(`/workouts/${id}/log${routineId ? '' : '?add=1'}`);
   });
 
   router.get('/', (req, res) => {
@@ -66,13 +67,7 @@ module.exports = (repo) => {
 
   router.post('/:id/update', (req, res) => {
     const id = Number(req.params.id);
-    const toIso = (v) => (v ? new Date(v).toISOString() : undefined);
-    repo.updateWorkout(id, {
-      name: req.body.name,
-      notes: req.body.notes,
-      started_at: toIso(req.body.started_at),
-      finished_at: toIso(req.body.finished_at),
-    });
+    repo.updateWorkout(id, { name: req.body.name, notes: req.body.notes, date: req.body.date });
     res.redirect(`/workouts/${id}?${msg('Workout saved')}`);
   });
 

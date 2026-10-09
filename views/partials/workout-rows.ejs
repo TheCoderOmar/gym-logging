@@ -9,7 +9,7 @@
         </span>
         <span class="figures">
           <span class="num"><%= fmt.num(w.volume) %> <%= unit %></span>
-          <%= w.set_count %> sets · <%= fmt.duration(w.started_at, w.finished_at) %>
+          <%= w.set_count %> <%= w.set_count === 1 ? 'set' : 'sets' %>
         </span>
       </a>
     </li>

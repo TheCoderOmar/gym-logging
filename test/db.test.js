@@ -34,6 +34,36 @@ test('routine → workout pre-fills exercises and empty sets', () => {
   assert.equal(repo.inProgressWorkout().id, wid);
 });
 
+test('workouts are dated by day only (stored at local noon) and the date can be changed', () => {
+  const repo = freshDb();
+  const wid = repo.startWorkout();
+  const d = new Date(repo.getWorkout(wid).started_at);
+  const now = new Date();
+  assert.deepEqual([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()], [now.getFullYear(), now.getMonth(), now.getDate(), 12, 0]);
+  assert.equal(repo.getWorkout(wid).name, 'Workout');
+
+  repo.updateWorkout(wid, { date: '2026-03-27' });
+  const moved = new Date(repo.getWorkout(wid).started_at);
+  assert.deepEqual([moved.getFullYear(), moved.getMonth(), moved.getDate(), moved.getHours()], [2026, 2, 27, 12]);
+
+  repo.updateWorkout(wid, { date: 'not a date', name: 'Legs' });
+  assert.equal(repo.getWorkout(wid).started_at, moved.toISOString());
+  assert.equal(repo.getWorkout(wid).name, 'Legs');
+
+  const back = repo.startWorkout({ date: '2026-01-05' });
+  assert.equal(new Date(repo.getWorkout(back).started_at).getDate(), 5);
+});
+
+test('finishing counts sets with reps as done even if never ticked off', () => {
+  const repo = freshDb();
+  const wid = repo.startWorkout();
+  repo.addWorkoutExercise(wid, '0003');
+  const [s] = repo.getWorkout(wid).exercises[0].sets;
+  repo.updateSet(s.id, { weight: 12, reps: 10 }); // typed in, not ticked
+  repo.finishWorkout(wid);
+  assert.equal(repo.getWorkout(wid).exercises[0].sets[0].done, 1);
+});
+
 test('finishing drops empty sets and exercises, keeps logged ones', () => {
   const repo = freshDb();
   const wid = repo.startWorkout();
@@ -214,4 +244,64 @@ test('search by muscles: exercises working all picked muscles, best score first,
   repo.setExerciseMuscles('0001', [{ muscle: 'biceps', points: 0 }]); // 0 = doesn't count
   assert.equal(repo.searchExercises({ regions: ['lats', 'biceps'] }).partial, true);
   assert.equal(repo.searchExercises({ regions: ['nonsense'] }).total, 4); // unknown regions ignored
+});
+
+function withHammerCurl() {
+  const repo = freshDb();
+  repo.db.prepare('INSERT INTO exercises (id, name, body_part, equipment, target) VALUES (?, ?, ?, ?, ?)')
+    .run('0004', 'dumbbell hammer curl', 'upper arms', 'dumbbell', 'biceps');
+  return repo;
+}
+
+test('head scores: defaults, saved edits, capping by the muscle score, reset', () => {
+  const repo = withHammerCurl();
+  const brach = (heads) => heads.biceps.find((h) => h.head === 'brachialis');
+  assert.equal(brach(repo.getExerciseHeads('0004')).points, 3);
+  assert.equal(brach(repo.getExerciseHeads('0004')).edited, false);
+
+  const saved = repo.setExerciseHeads('0004', 'biceps', [{ head: 'biceps_long', points: 3 }]);
+  const long = saved.biceps.find((h) => h.head === 'biceps_long');
+  assert.equal(long.points, 3);
+  assert.equal(long.edited, true);
+  assert.equal(brach(saved).points, 3); // untouched heads keep their score
+
+  repo.setExerciseMuscles('0004', [{ muscle: 'biceps', points: 1 }]);
+  assert.ok(repo.getExerciseHeads('0004').biceps.every((h) => h.points <= 1));
+
+  repo.setExerciseMuscles('0004', [{ muscle: 'biceps', points: 3 }]);
+  const reset = repo.resetExerciseHeads('0004', 'biceps');
+  assert.ok(reset.biceps.every((h) => !h.edited));
+  assert.equal(reset.biceps.find((h) => h.head === 'biceps_long').points, 1);
+});
+
+test('head scores reject bad input', () => {
+  const repo = withHammerCurl();
+  assert.throws(() => repo.setExerciseHeads('0004', 'glutes', [{ head: 'biceps_long', points: 1 }]), /no heads/);
+  assert.throws(() => repo.setExerciseHeads('0004', 'biceps', [{ head: 'delt_side', points: 1 }]), /isn’t a biceps head/);
+  assert.throws(() => repo.setExerciseHeads('0004', 'biceps', [{ head: 'biceps_long', points: 4 }]), /whole number from 0 to 3/);
+  assert.throws(() => repo.setExerciseHeads('0004', 'chest', [{ head: 'chest_upper', points: 1 }]), /doesn’t work the chest/);
+});
+
+test('exerciseLog rows carry the exercise name and saved head scores', () => {
+  const repo = withHammerCurl();
+  repo.setExerciseHeads('0004', 'biceps', [{ head: 'biceps_long', points: 2 }]);
+  const wid = repo.startWorkout();
+  const we = repo.addWorkoutExercise(wid, '0004');
+  repo.updateSet(repo.getWorkout(wid).exercises[0].sets[0].id, { weight: 14, reps: 10, done: 1 });
+  repo.finishWorkout(wid);
+  const [row] = repo.exerciseLog('2000-01-01T00:00:00Z');
+  assert.equal(row.name, 'dumbbell hammer curl');
+  assert.ok(row.heads.some((h) => h.head === 'biceps_long' && h.points === 2));
+  assert.ok(we);
+});
+
+test('editing a head does not freeze the other heads at a lowered muscle score', () => {
+  const repo = withHammerCurl();
+  repo.setExerciseHeads('0004', 'biceps', [{ head: 'biceps_long', points: 3 }]);
+  repo.setExerciseMuscles('0004', [{ muscle: 'biceps', points: 1 }]);
+  repo.setExerciseHeads('0004', 'biceps', [{ head: 'brachialis', points: 1 }]);
+  repo.setExerciseMuscles('0004', [{ muscle: 'biceps', points: 3 }]);
+  const heads = repo.getExerciseHeads('0004').biceps;
+  assert.equal(heads.find((h) => h.head === 'biceps_long').points, 3);
+  assert.equal(heads.find((h) => h.head === 'biceps_short').edited, false); // never edited: stays automatic
 });

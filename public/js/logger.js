@@ -345,7 +345,7 @@
     }
   });
 
-  document.getElementById('add-lift').addEventListener('click', () => {
+  const openPicker = () =>
     ExercisePicker.open(async (ex) => {
       await flushAll();
       state = await api('POST', `/workouts/${workoutId}/exercises`, { exercise_id: ex.id });
@@ -355,29 +355,35 @@
       last.scrollIntoView({ block: 'center', behavior: 'smooth' });
       last.querySelector('input[data-field="weight"]')?.focus({ preventScroll: true });
     });
-  });
+  document.getElementById('add-lift').addEventListener('click', openPicker);
 
-  // Workout name + notes
+  // Workout name, date + notes
   const titleEl = document.getElementById('log-title');
+  const dateEl = document.getElementById('log-date');
   const notesEl = document.getElementById('log-notes');
   let metaTimer = null;
-  const saveMeta = () => api('PATCH', `/workouts/${workoutId}`, { name: titleEl.value, notes: notesEl.value });
+  const saveMeta = () => api('PATCH', `/workouts/${workoutId}`, { name: titleEl.value, notes: notesEl.value, date: dateEl.value || undefined });
   for (const el of [titleEl, notesEl]) {
     el.addEventListener('input', () => {
       clearTimeout(metaTimer);
       metaTimer = setTimeout(saveMeta, 600);
     });
   }
+  dateEl.addEventListener('change', () => {
+    if (!dateEl.value) return;
+    clearTimeout(metaTimer);
+    saveMeta();
+  });
 
   const finishBtn = document.getElementById('finish');
   if (finishBtn) {
     finishBtn.addEventListener('click', async () => {
-      const done = state.workout.exercises.reduce((n, we) => n + we.sets.filter((s) => s.done).length, 0);
+      const done = state.workout.exercises.reduce((n, we) => n + we.sets.filter((s) => s.done || s.reps > 0).length, 0);
       const ok = await confirmDialog({
         title: 'Finish this workout?',
         message: done
-          ? `You completed ${done} ${done === 1 ? 'set' : 'sets'}. Sets you left empty are removed.`
-          : 'No sets are ticked off yet. Sets you left empty are removed.',
+          ? `${done} ${done === 1 ? 'set is' : 'sets are'} logged. Sets you left empty are removed.`
+          : 'No sets have reps yet. Sets you left empty are removed.',
         confirmLabel: 'Finish workout',
         danger: false,
       });
@@ -389,18 +395,15 @@
     });
   }
 
-  // Elapsed clock
-  const clock = document.getElementById('clock');
-  if (clock) {
-    const start = new Date(clock.dataset.start).getTime();
-    const tick = () => {
-      const s = Math.max(0, Math.floor((Date.now() - start) / 1000));
-      const h = Math.floor(s / 3600);
-      const m = Math.floor((s % 3600) / 60);
-      clock.textContent = h ? `${h}:${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`;
-    };
-    tick();
-    setInterval(tick, 1000);
+  // Editing a finished workout: save, count filled-in sets, drop empty ones.
+  const doneEditingBtn = document.getElementById('done-editing');
+  if (doneEditingBtn) {
+    doneEditingBtn.addEventListener('click', async () => {
+      clearTimeout(metaTimer);
+      await Promise.all([flushAll(), saveMeta()]);
+      const res = await api('POST', `/workouts/${workoutId}/finish`);
+      location.href = res.redirect;
+    });
   }
 
   /* ---------- rest timer ---------- */
@@ -463,7 +466,16 @@
     return { start, stop };
   })();
 
-  load().catch(() => {
-    liftsEl.innerHTML = '<div class="error-box">Couldn’t load this workout. Check the server is running, then reload.</div>';
-  });
+  load()
+    .then(() => {
+      // Fresh freestyle workout: go straight to picking the first exercise.
+      const url = new URL(location.href);
+      if (!url.searchParams.has('add')) return;
+      url.searchParams.delete('add');
+      history.replaceState(null, '', url);
+      if (!state.workout.exercises.length) openPicker();
+    })
+    .catch(() => {
+      liftsEl.innerHTML = '<div class="error-box">Couldn’t load this workout. Check the server is running, then reload.</div>';
+    });
 })();

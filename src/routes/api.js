@@ -42,6 +42,20 @@ module.exports = (repo) => {
     res.json({ muscles: repo.resetExerciseMuscles(String(req.params.id)) });
   });
 
+  // Per-set head scores for one region: { region, scores: [{ head, points }] }
+  router.get('/exercises/:id/heads', (req, res) => {
+    res.json({ heads: repo.getExerciseHeads(String(req.params.id)) });
+  });
+
+  router.put('/exercises/:id/heads', (req, res) => {
+    const scores = Array.isArray(req.body.scores) ? req.body.scores : [];
+    res.json({ heads: repo.setExerciseHeads(String(req.params.id), String(req.body.region || ''), scores) });
+  });
+
+  router.post('/exercises/:id/heads/reset', (req, res) => {
+    res.json({ heads: repo.resetExerciseHeads(String(req.params.id), String(req.body.region || '')) });
+  });
+
   router.get('/workouts/:id', (req, res) => {
     const state = workoutState(id(req));
     if (!state) return res.status(404).json({ error: 'Workout not found' });
@@ -49,7 +63,7 @@ module.exports = (repo) => {
   });
 
   router.patch('/workouts/:id', (req, res) => {
-    repo.updateWorkout(id(req), { name: req.body.name, notes: req.body.notes });
+    repo.updateWorkout(id(req), { name: req.body.name, notes: req.body.notes, date: req.body.date });
     res.json({ ok: true });
   });
 

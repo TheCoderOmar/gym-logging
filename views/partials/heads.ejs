@@ -1,0 +1,20 @@
+<div class="heads-card" data-region="<%= region %>">
+  <div class="heads-top">
+    <h2 id="heads-title"><%= label %></h2>
+    <button type="button" class="btn btn-sm btn-quiet" data-close aria-label="Close"><%- icon('x') %></button>
+  </div>
+  <div class="heads-fig"><%- figure %></div>
+  <ul class="heads-list">
+    <% for (const h of heads) {
+      const when = h.days == null ? 'Not trained yet' : h.days === 0 ? 'Today' : h.days === 1 ? 'Yesterday' : h.days + ' days ago'; %>
+      <li>
+        <span class="swatch b-<%= h.bucket %>" aria-hidden="true"></span>
+        <strong><%= h.label %></strong>
+        <span class="muted"><%= when %><%= h.days == null ? '' : ' · ' + h.sets + (h.sets === 1 ? ' set' : ' sets') %></span>
+      </li>
+    <% } %>
+  </ul>
+  <ul class="recency-key" aria-label="Colour key">
+    <% for (const b of buckets) { %><li><span class="swatch b-<%= b.id %>"></span><%= b.label %></li><% } %>
+  </ul>
+</div>

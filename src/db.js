@@ -2,7 +2,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { KG_PER_LB, convert, isUnit } = require('./lib/units');
+const { dayIso } = require('./lib/format');
 const { defaultMusclePoints, legacyMusclePoints, musclesInRegion, REGIONS, MAX_POINTS, MUSCLE_DEFAULTS_VERSION } = require('./lib/muscles');
+const { HEAD_GROUPS, hasHeads, exerciseHeads, regionLabel } = require('./lib/heads');
 
 // GYM_DB lets you point the app at another database file (e.g. a demo copy).
 const DEFAULT_PATH = process.env.GYM_DB || path.join(__dirname, '..', 'db', 'gym.sqlite');
@@ -336,6 +338,52 @@ function createRepo(db) {
     return getExerciseMuscles(exerciseId);
   }
 
+  function getHeadOverrides(exerciseId) {
+    return all('SELECT head, points FROM exercise_heads WHERE exercise_id = ?', exerciseId);
+  }
+
+  // Effective head scores per region the exercise works: { biceps: [{ head, label, points, defaultPoints, edited }], … }
+  function getExerciseHeads(exerciseId) {
+    const ex = get('SELECT name, target, secondary_muscles FROM exercises WHERE id = ?', exerciseId);
+    if (!ex) return {};
+    ex.secondary_muscles = JSON.parse(ex.secondary_muscles || '[]');
+    return exerciseHeads(ex, getExerciseMuscles(exerciseId), getHeadOverrides(exerciseId));
+  }
+
+  // Save head scores for one region. Only the heads edited are stored; the rest stay
+  // automatic (storing them would freeze values capped by a temporarily lowered muscle score).
+  function setExerciseHeads(exerciseId, regionId, scores) {
+    const label = regionLabel(regionId).toLowerCase();
+    if (!hasHeads(regionId)) throw new Error(`${regionLabel(regionId)} has no heads to score`);
+    const current = getExerciseHeads(exerciseId)[regionId];
+    if (!current) throw new Error(`This exercise doesn’t work the ${label}`);
+    const known = new Set(current.map((h) => h.head));
+    const next = new Map();
+    for (const { head, points } of scores) {
+      if (!known.has(head)) throw new Error(`“${head}” isn’t a ${label} head`);
+      const p = Number(points);
+      if (!Number.isInteger(p) || p < 0 || p > MAX_POINTS) throw new Error(`Score must be a whole number from 0 to ${MAX_POINTS}`);
+      next.set(head, p);
+    }
+    tx(() => {
+      for (const [head, points] of next) {
+        run(
+          `INSERT INTO exercise_heads (exercise_id, head, points) VALUES (?, ?, ?)
+           ON CONFLICT(exercise_id, head) DO UPDATE SET points = excluded.points`,
+          exerciseId, head, points,
+        );
+      }
+    });
+    return getExerciseHeads(exerciseId);
+  }
+
+  function resetExerciseHeads(exerciseId, regionId) {
+    if (!hasHeads(regionId)) throw new Error(`${regionLabel(regionId)} has no heads to score`);
+    const ids = HEAD_GROUPS[regionId].map((h) => h.id);
+    run(`DELETE FROM exercise_heads WHERE exercise_id = ? AND head IN (${ids.map(() => '?').join(', ')})`, exerciseId, ...ids);
+    return getExerciseHeads(exerciseId);
+  }
+
   function deleteCustomExercise(id) {
     const used =
       get('SELECT COUNT(*) AS n FROM workout_exercises WHERE exercise_id = ?', id).n +
@@ -424,7 +472,7 @@ function createRepo(db) {
       `SELECT w.id, w.started_at FROM workouts w JOIN workout_exercises we ON we.workout_id = w.id
         WHERE we.exercise_id = ? AND w.id != ?
           AND EXISTS (SELECT 1 FROM sets s WHERE s.workout_exercise_id = we.id AND s.done = 1)
-        ORDER BY w.started_at DESC LIMIT 1`,
+        ORDER BY w.started_at DESC, w.id DESC LIMIT 1`,
       exerciseId, excludeWorkoutId,
     );
     if (!last) return null;
@@ -452,11 +500,14 @@ function createRepo(db) {
     );
   }
 
-  function startWorkout({ routineId = null, name = '' } = {}) {
+  function startWorkout({ routineId = null, name = '', date } = {}) {
     return tx(() => {
       const routine = routineId ? getRoutine(routineId) : null;
-      const title = String(name || '').trim() || (routine ? routine.name : defaultWorkoutName());
-      const id = Number(run('INSERT INTO workouts (name, routine_id) VALUES (?, ?)', title, routine ? routine.id : null).lastInsertRowid);
+      const title = String(name || '').trim() || (routine ? routine.name : 'Workout');
+      const day = dayIso(date) || dayIso();
+      const id = Number(
+        run('INSERT INTO workouts (name, routine_id, started_at) VALUES (?, ?, ?)', title, routine ? routine.id : null, day).lastInsertRowid,
+      );
       if (routine) {
         for (const re of routine.exercises) {
           const weId = insertWorkoutExercise(id, re.exercise_id, re.rest_seconds);
@@ -468,14 +519,8 @@ function createRepo(db) {
     });
   }
 
-  function defaultWorkoutName() {
-    const h = new Date().getHours();
-    const part = h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : 'Evening';
-    return `${part} workout`;
-  }
-
   function inProgressWorkout() {
-    return get('SELECT * FROM workouts WHERE finished_at IS NULL ORDER BY started_at DESC LIMIT 1');
+    return get('SELECT * FROM workouts WHERE finished_at IS NULL ORDER BY started_at DESC, id DESC LIMIT 1');
   }
 
   function getWorkout(id) {
@@ -497,21 +542,27 @@ function createRepo(db) {
     return workout;
   }
 
-  function updateWorkout(id, { name, notes, started_at, finished_at }) {
+  // `date` is a local "YYYY-MM-DD"; workouts only keep the day, not a time.
+  function updateWorkout(id, { name, notes, date }) {
     const w = get('SELECT * FROM workouts WHERE id = ?', id);
     if (!w) throw new Error('Workout not found');
     run(
-      'UPDATE workouts SET name = ?, notes = ?, started_at = ?, finished_at = ? WHERE id = ?',
+      'UPDATE workouts SET name = ?, notes = ?, started_at = ? WHERE id = ?',
       name !== undefined ? String(name).trim() || w.name : w.name,
       notes !== undefined ? notes : w.notes,
-      started_at || w.started_at,
-      finished_at !== undefined ? finished_at : w.finished_at,
+      (date && dayIso(date)) || w.started_at,
       id,
     );
   }
 
   function finishWorkout(id) {
     return tx(() => {
+      // A set with reps counts as done even if it was never ticked off.
+      run(
+        `UPDATE sets SET done = 1 WHERE done = 0 AND reps > 0
+           AND workout_exercise_id IN (SELECT id FROM workout_exercises WHERE workout_id = ?)`,
+        id,
+      );
       // Drop empty sets that were never filled in, then exercises left with no sets.
       run(
         `DELETE FROM sets WHERE done = 0 AND weight IS NULL AND reps IS NULL
@@ -540,7 +591,7 @@ function createRepo(db) {
                   SELECT e.name FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id
                    WHERE we.workout_id = w.id ORDER BY we.position)) AS exercise_names
          FROM workouts w WHERE w.finished_at IS NOT NULL
-        ORDER BY w.started_at DESC LIMIT ? OFFSET ?`,
+        ORDER BY w.started_at DESC, w.id DESC LIMIT ? OFFSET ?`,
       limit, offset,
     );
     return { total, rows: rows.map((r) => ({ ...r, volume: Math.round(convert(r.volume_kg, 'kg', unit)) })) };
@@ -730,8 +781,9 @@ function createRepo(db) {
   // Includes the workout in progress so today's ticked-off sets show up immediately.
   function exerciseLog(isoStart) {
     const muscleCache = new Map();
+    const headCache = new Map();
     return all(
-      `SELECT w.id AS workout_id, w.started_at, e.id AS exercise_id, e.body_part, e.target, e.secondary_muscles,
+      `SELECT w.id AS workout_id, w.started_at, e.id AS exercise_id, e.name, e.body_part, e.target, e.secondary_muscles,
               COUNT(s.id) AS sets
          FROM workouts w JOIN workout_exercises we ON we.workout_id = w.id
          JOIN exercises e ON e.id = we.exercise_id
@@ -742,7 +794,8 @@ function createRepo(db) {
     ).map((r) => {
       // One muscle-score lookup per distinct exercise, not per row.
       if (!muscleCache.has(r.exercise_id)) muscleCache.set(r.exercise_id, getExerciseMuscles(r.exercise_id));
-      return { ...r, secondary_muscles: JSON.parse(r.secondary_muscles || '[]'), muscles: muscleCache.get(r.exercise_id) };
+      if (!headCache.has(r.exercise_id)) headCache.set(r.exercise_id, getHeadOverrides(r.exercise_id));
+      return { ...r, secondary_muscles: JSON.parse(r.secondary_muscles || '[]'), muscles: muscleCache.get(r.exercise_id), heads: headCache.get(r.exercise_id) };
     });
   }
 
@@ -757,6 +810,7 @@ function createRepo(db) {
     exerciseCount, searchExercises, filterOptions, getExercise, getMedia, saveMedia,
     createCustomExercise, updateCustomExercise, deleteCustomExercise, nextCustomId,
     ensureExerciseMuscles, syncExerciseMuscles, getExerciseMuscles, setExerciseMuscles, resetExerciseMuscles,
+    getExerciseHeads, setExerciseHeads, resetExerciseHeads,
     listRoutines, getRoutine, saveRoutine, deleteRoutine,
     lastUnitFor, previousSets, startWorkout, inProgressWorkout, getWorkout, updateWorkout,
     finishWorkout, deleteWorkout, listWorkouts, workoutToRoutine,
