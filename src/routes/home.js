@@ -1,7 +1,8 @@
 const express = require('express');
 const fmt = require('../lib/format');
 const { muscleStatus, trainingCalendar, BUCKETS, EMOJI, AREA_LABEL } = require('../lib/muscles');
-const { bodyMap } = require('../lib/bodymap');
+const { bodyMap, headFigure } = require('../lib/bodymap');
+const { hasHeads, headStatus, regionLabel } = require('../lib/heads');
 
 // How many years ahead the training log lets you page to.
 const FUTURE_YEARS = 5;
@@ -53,6 +54,15 @@ module.exports = (repo) => {
       ...trainingLog(req.query.year, now),
       scripts: ['/js/home.js'],
     });
+  });
+
+  // Close-up of one muscle split into its heads, for the recovery-map popup.
+  router.get('/muscles/:region', (req, res, next) => {
+    const region = String(req.params.region);
+    if (!hasHeads(region)) return next(); // → 404
+    const now = new Date();
+    const heads = headStatus(repo.exerciseLog(new Date(now.getTime() - 365 * fmt.DAY).toISOString()), region, now);
+    res.render('partials/heads', { region, label: regionLabel(region), heads, figure: headFigure(region, heads), buckets: BUCKETS });
   });
 
   // Just the training-log panel, so the year arrows can swap it in without a page reload.

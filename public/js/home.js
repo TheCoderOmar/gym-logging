@@ -1,5 +1,42 @@
 // Home: training-log view toggle and legend filters (both remembered per browser),
 // year paging without a page reload, and on narrow screens the calendar scrolls to today.
+// Also: clicking a muscle with heads on the recovery map opens its close-up.
+(() => {
+  const dlg = document.getElementById('heads-dialog');
+  if (!dlg) return;
+  let opener = null;
+
+  async function open(muscle) {
+    try {
+      const res = await fetch(`/muscles/${encodeURIComponent(muscle.dataset.region)}`);
+      if (!res.ok) throw new Error(res.status);
+      dlg.innerHTML = await res.text();
+    } catch (err) {
+      window.toast?.('Couldn’t load that muscle', { tone: 'error' });
+      return;
+    }
+    opener = muscle;
+    dlg.showModal();
+    dlg.querySelector('[data-close]')?.focus();
+  }
+
+  document.addEventListener('click', (e) => {
+    const muscle = e.target.closest('.muscle[data-heads]');
+    if (muscle) open(muscle);
+  });
+  document.addEventListener('keydown', (e) => {
+    const muscle = e.target.closest?.('.muscle[data-heads]');
+    if (muscle && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      open(muscle);
+    }
+  });
+  dlg.addEventListener('click', (e) => {
+    if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); // backdrop or ×
+  });
+  dlg.addEventListener('close', () => opener?.focus());
+})();
+
 (() => {
   if (!document.getElementById('training-log')) return;
 

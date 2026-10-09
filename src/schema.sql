@@ -88,3 +88,12 @@ CREATE TABLE IF NOT EXISTS exercise_muscles (
   position    INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (exercise_id, muscle)
 );
+
+-- Head scores Omar edited by hand (recovery-map close-ups). Only edits are stored:
+-- defaults are guessed from the exercise name on the fly (src/lib/heads.js).
+CREATE TABLE IF NOT EXISTS exercise_heads (
+  exercise_id TEXT NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+  head        TEXT NOT NULL,
+  points      INTEGER NOT NULL CHECK (points BETWEEN 0 AND 3),
+  PRIMARY KEY (exercise_id, head)
+);

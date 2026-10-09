@@ -16,7 +16,7 @@ To log from your phone on the same Wi-Fi, start it with `HOST=0.0.0.0 npm start`
 
 ## Pages
 
-- **Home** — start an empty workout or one from a routine, this week at a glance, recent workouts.
+- **Home** — start a freestyle workout (opens straight into the exercise picker) or one from a routine, this week at a glance, recent workouts.
 - **History** — every finished workout with sets, volume and duration; edit, delete or save as a routine.
 - **Exercises** — search and filter the library, see GIF + instructions + your records; add your own.
 - **Routines** — build reusable workouts with target sets/reps/rest. Four starter routines are included.

@@ -3,6 +3,7 @@ const multer = require('multer');
 const { sessionSummaries, personalRecords } = require('../lib/stats');
 const { defaultMusclePoints, regionLabelOf, TRAINED_THRESHOLD, MAX_POINTS, REGIONS } = require('../lib/muscles');
 const { muscleFilterMap } = require('../lib/bodymap');
+const { HEAD_GROUPS, regionLabel } = require('../lib/heads');
 
 const REGION_LABELS = Object.fromEntries(REGIONS.map((r) => [r.id, r.label]));
 
@@ -98,6 +99,8 @@ module.exports = (repo) => {
       recent: recent.filter((r) => r.sets.length),
       prs: personalRecords(sets, unit),
       muscles: muscleRows(ex),
+      heads: repo.getExerciseHeads(ex.id),
+      headRegionLabels: Object.fromEntries(Object.keys(HEAD_GROUPS).map((r) => [r, regionLabel(r)])),
       threshold: TRAINED_THRESHOLD,
       maxPoints: MAX_POINTS,
       scripts: [...(sessions.length > 1 ? ['/vendor/chart.js/chart.umd.min.js', '/js/charts.js'] : []), '/js/muscle-scores.js'],

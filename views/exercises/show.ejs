@@ -52,6 +52,7 @@
             </li>
           <% } %>
         </ul>
+        <div class="ms-heads" id="ms-heads" data-heads="<%= JSON.stringify(heads) %>" data-labels="<%= JSON.stringify(headRegionLabels) %>"></div>
       </section>
 
       <% const steps = (ex.instruction_steps && ex.instruction_steps.en) || []; %>

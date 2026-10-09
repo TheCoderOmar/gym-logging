@@ -7,12 +7,12 @@
   <section class="home-top" aria-labelledby="start-title">
     <div>
       <h1 id="start-title"><%= live ? 'You’re mid-workout' : greeting %></h1>
-      <p class="muted"><%= live ? live.name + ' started at ' + fmt.time(live.started_at) + '.' : (totals.workouts ? 'Check what’s recovered, then pick a session.' : 'Log a workout and this page fills in with what you’ve trained.') %></p>
+      <p class="muted"><%= live ? live.name + ' (' + fmt.relDay(live.started_at) + ') is still open.' : (totals.workouts ? 'Check what’s recovered, then pick a session.' : 'Log a workout and this page fills in with what you’ve trained.') %></p>
     </div>
     <% if (live) { %>
       <a class="btn btn-go btn-lg" href="/workouts/<%= live.id %>/log"><%- icon('play') %> Back to workout</a>
     <% } else { %>
-      <form method="post" action="/workouts/start"><button class="btn btn-go btn-lg"><%- icon('plus') %> Start empty workout</button></form>
+      <form method="post" action="/workouts/start"><button class="btn btn-go btn-lg"><%- icon('plus') %> Start workout</button></form>
     <% } %>
   </section>
 
@@ -62,6 +62,8 @@
       </section>
     </aside>
   </div>
+
+  <dialog class="heads-dialog" id="heads-dialog" aria-labelledby="heads-title"></dialog>
 
   <%- include('partials/training-log') %>
 

@@ -21,7 +21,7 @@
     <a class="nav-link" href="/progress" <%- active('/progress') ? 'aria-current="page"' : '' %>><%- icon('progress') %> Progress</a>
     <a class="nav-link nav-settings" href="/settings" <%- active('/settings') ? 'aria-current="page"' : '' %>><%- icon('settings') %> Settings</a>
     <% if (live && path !== '/' && !path.startsWith('/workouts/' + live.id + '/log')) { %>
-      <a class="rail-live" href="/workouts/<%= live.id %>/log">Back to workout<small><%= live.name %> · started <%= fmt.time(live.started_at) %></small></a>
+      <a class="rail-live" href="/workouts/<%= live.id %>/log">Back to workout<small><%= live.name %> · <%= fmt.relDay(live.started_at) %></small></a>
     <% } %>
   </nav>
   <main id="main">

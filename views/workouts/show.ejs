@@ -4,13 +4,12 @@
   <div class="page-head">
     <div>
       <h1><%= w.name %></h1>
-      <p class="muted"><%= fmt.weekday(w.started_at) %> <%= fmt.date(w.started_at, { year: 'numeric' }) %>, <%= fmt.time(w.started_at) %>–<%= fmt.time(w.finished_at) %><%= w.routine_name ? ' · from ' + w.routine_name : '' %></p>
+      <p class="muted"><%= fmt.weekday(w.started_at) %> <%= fmt.date(w.started_at, { year: 'numeric' }) %><%=w.routine_name ? ' · from ' + w.routine_name : '' %></p>
     </div>
     <a class="btn" href="/workouts/<%= w.id %>/log"><%- icon('edit') %> Edit sets</a>
   </div>
 
   <div class="detail-figures">
-    <div><b class="num"><%= fmt.duration(w.started_at, w.finished_at) %></b><span>duration</span></div>
     <div><b class="num"><%= w.exercises.length %></b><span>exercises</span></div>
     <div><b class="num"><%= totals.sets %></b><span>working sets</span></div>
     <div><b class="num"><%= fmt.num(totals.volume) %> <%= unit %></b><span>volume</span></div>
@@ -48,12 +47,11 @@
   </div>
 
   <details class="edit-meta">
-    <summary>Edit name, notes and times</summary>
+    <summary>Edit name, date and notes</summary>
     <form class="form-grid" method="post" action="/workouts/<%= w.id %>/update">
-      <div class="field"><label for="name">Name</label><input id="name" type="text" name="name" value="<%= w.name %>" required></div>
       <div class="two">
-        <div class="field"><label for="started_at">Started</label><input id="started_at" type="datetime-local" name="started_at" value="<%= fmt.localInput(w.started_at) %>"></div>
-        <div class="field"><label for="finished_at">Finished</label><input id="finished_at" type="datetime-local" name="finished_at" value="<%= fmt.localInput(w.finished_at) %>"></div>
+        <div class="field"><label for="name">Name</label><input id="name" type="text" name="name" value="<%= w.name %>" required></div>
+        <div class="field"><label for="date">Date</label><input id="date" type="date" name="date" value="<%= fmt.dayInput(w.started_at) %>" max="<%= fmt.dayInput(new Date()) %>" required></div>
       </div>
       <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes"><%= w.notes || '' %></textarea></div>
       <div class="btn-row"><button class="btn btn-go">Save workout</button></div>
