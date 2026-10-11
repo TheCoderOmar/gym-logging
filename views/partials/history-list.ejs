@@ -1,0 +1,19 @@
+<%# Filterable list of workouts + sports sessions. Used by History (with pager) and Home's recent list.
+    Expects rows, filters [{ type, label, href, fragment, current }], and optionally page/pages/pageLink. %>
+<div class="history-list">
+  <nav class="chart-tabs history-filter" aria-label="Show">
+    <% for (const f of filters) { %><a href="<%= f.href %>" data-fragment="<%= f.fragment %>" aria-current="<%= f.current %>"><%= f.label %></a><% } %>
+  </nav>
+  <% if (!rows.length) { %>
+    <div class="empty"><p><%= emptyText %></p></div>
+  <% } else { %>
+    <%- include('workout-rows', { rows }) %>
+    <% if (typeof pages !== 'undefined' && pages > 1) { %>
+      <nav class="pager" aria-label="Pages">
+        <% if (page > 1) { const l = pageLink(page - 1); %><a class="btn" href="<%= l.href %>" data-fragment="<%= l.fragment %>">Newer</a><% } else { %><span></span><% } %>
+        <span class="muted">Page <%= page %> of <%= pages %></span>
+        <% if (page < pages) { const l = pageLink(page + 1); %><a class="btn" href="<%= l.href %>" data-fragment="<%= l.fragment %>">Older</a><% } else { %><span></span><% } %>
+      </nav>
+    <% } %>
+  <% } %>
+</div>

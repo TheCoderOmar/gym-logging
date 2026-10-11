@@ -2,7 +2,7 @@
 // how much an exercise works each head (guessed from its name, editable per exercise),
 // and when each head was last trained.
 const {
-  REGIONS, TRAINED_THRESHOLD, regionOf, regionPoints, defaultMusclePoints, recencyBucket, intensity, daysBetween, dayKey,
+  REGIONS, TRAINED_THRESHOLD, regionOf, regionPoints, defaultMusclePoints, recencyBucket, intensity, daysBetween, dayKey, addActivity, sportsOf,
 } = require('./muscles');
 
 const HEAD_GROUPS = {
@@ -152,9 +152,9 @@ function headStatus(rows, regionId, now = new Date()) {
       if (points <= 0) continue;
       if (!perDay.has(head)) perDay.set(head, new Map());
       const days = perDay.get(head);
-      const d = days.get(key) || { points: 0, sets: 0, date: row.started_at };
+      const d = days.get(key) || { points: 0, sets: 0, sports: new Map(), date: row.started_at };
       d.points += points * row.sets;
-      d.sets += row.sets;
+      addActivity(d, row);
       days.set(key, d);
     }
   }
@@ -172,6 +172,7 @@ function headStatus(rows, regionId, now = new Date()) {
       lastDate: last ? last.date : null,
       points: last ? last.points : 0,
       sets: last ? last.sets : 0,
+      sports: sportsOf(last),
       intensity: last ? intensity(last.points) : 0,
     };
   });

@@ -22,6 +22,12 @@ const paths = {
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
 };
 
+// Two-tone filled flame (not a stroke icon): "this muscle hit its weekly target".
+const flame = `<svg class="flame" viewBox="0 0 24 24" aria-hidden="true">
+  <path class="flame-out" d="M12 2c1 3.2 4.6 5.4 5.6 9.2.9 3.7-1.4 7.6-5.6 8.8-4.3-1.2-6.5-5-5.6-8.4.5-2 1.9-3.2 2.4-5 .9 1.3 1.1 2.4 1 3.6C11.6 8.4 12.6 5.6 12 2Z"/>
+  <path class="flame-in" d="M12 11.5c.6 1.6 2.4 2.7 2.6 4.6.2 1.9-1.1 3.4-2.6 3.9-1.6-.5-2.8-2-2.6-3.6.1-1 .7-1.7 1-2.6.5.6.7 1.2.7 1.8.6-1.3.9-2.7.9-4.1Z"/>
+</svg>`;
+
 function icon(name, cls = '') {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${cls ? ` class="${cls}"` : ''}>${paths[name] || ''}</svg>`;
 }
@@ -29,4 +35,4 @@ function icon(name, cls = '') {
 // Brand mark: a plate seen face-on.
 const brandMark = `<svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--go)"/><circle cx="16" cy="16" r="9.5" fill="none" stroke="var(--chalk)" stroke-width="1.5" opacity=".55"/><circle cx="16" cy="16" r="3.2" fill="var(--chalk)"/></svg>`;
 
-module.exports = { icon, brandMark };
+module.exports = { icon, brandMark, flame };

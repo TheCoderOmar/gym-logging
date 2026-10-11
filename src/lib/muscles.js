@@ -180,6 +180,14 @@ const dayKey = (d) => {
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 };
 
+// A day's tally keeps gym sets and sport time apart: sport rows (sport_id) carry `sets`
+// only as map weight, so they're shown as time played instead.
+function addActivity(day, row) {
+  if (row.sport_id) day.sports.set(row.name, (day.sports.get(row.name) || 0) + row.minutes);
+  else day.sets += row.sets;
+}
+const sportsOf = (day) => (day ? [...day.sports].map(([label, minutes]) => ({ label, minutes })) : []);
+
 /**
  * Per-region status from per-exercise rows.
  * rows: { started_at, sets, muscles?: [{ muscle, points }], target, secondary_muscles }
@@ -196,9 +204,9 @@ function muscleStatus(rows, now = new Date()) {
     for (const [region, pts] of regionPoints(muscles)) {
       if (!perDay.has(region)) perDay.set(region, new Map());
       const days = perDay.get(region);
-      const d = days.get(key) || { points: 0, sets: 0, date: row.started_at };
+      const d = days.get(key) || { points: 0, sets: 0, sports: new Map(), date: row.started_at };
       d.points += pts * row.sets;
-      d.sets += row.sets;
+      addActivity(d, row);
       days.set(key, d);
     }
   }
@@ -220,10 +228,31 @@ function muscleStatus(rows, now = new Date()) {
       lastDate: last ? last.date : null,
       points: last ? last.points : 0,
       sets: last ? last.sets : 0,
+      sports: sportsOf(last),
       intensity: last ? intensity(last.points) : 0,
     };
   }
   return status;
+}
+
+/**
+ * Working sets each region got from `rows` (already limited to the week), weighted by score:
+ * a set gives the target muscle 1, a 2-point helper ⅔, a 1-point helper ⅓.
+ * Gym sets (`sets`) and sports (`sport`, at the map's 30 min = 1 set) are kept apart so the
+ * bar can show both. Returns every region, most in total first: [{ region, label, sets, sport, total }].
+ */
+function weeklySets(rows) {
+  const gym = new Map(REGIONS.map((r) => [r.id, 0]));
+  const sport = new Map(REGIONS.map((r) => [r.id, 0]));
+  for (const row of rows) {
+    if (!row.sets) continue;
+    const into = row.sport_id ? sport : gym;
+    const muscles = row.muscles && row.muscles.length ? row.muscles : defaultMusclePoints(row.target, row.secondary_muscles, row.name);
+    for (const [region, pts] of regionPoints(muscles)) into.set(region, into.get(region) + (row.sets * pts) / MAX_POINTS);
+  }
+  const r1 = (n) => Math.round(n * 10) / 10;
+  return REGIONS.map((r) => ({ region: r.id, label: r.label, sets: r1(gym.get(r.id)), sport: r1(sport.get(r.id)), total: r1(gym.get(r.id) + sport.get(r.id)) }))
+    .sort((a, b) => b.total - a.total);
 }
 
 // Training-log levels by number of different exercises in a day.
@@ -235,10 +264,12 @@ function exerciseLevel(count) {
 }
 
 const EMOJI = {
-  chest: '🫁', back: '🦅', shoulders: '🏋️', arms: '💪', legs: '🦵', glutes: '🍑', core: '🧱', cardio: '🏃', neck: '🦒', other: '🏋️',
+  chest: '🫁', back: '🦅', shoulders: '🏋️', arms: '💪', legs: '🦵', glutes: '🍑', core: '🧱', cardio: '🏃', neck: '🦒',
+  football: '⚽', padel: '🎾', other: '🏋️',
 };
 const AREA_LABEL = {
-  chest: 'Chest', back: 'Back', shoulders: 'Shoulders', arms: 'Arms', legs: 'Legs', glutes: 'Glutes', core: 'Core', cardio: 'Cardio', neck: 'Neck', other: 'Other',
+  chest: 'Chest', back: 'Back', shoulders: 'Shoulders', arms: 'Arms', legs: 'Legs', glutes: 'Glutes', core: 'Core', cardio: 'Cardio', neck: 'Neck',
+  football: 'Football', padel: 'Padel', other: 'Other',
 };
 
 // Dataset body_part (plus glute-targeted exercises) → emoji area.
@@ -248,13 +279,24 @@ function areaOf(bodyPart, target) {
   if (bp === 'upper arms' || bp === 'lower arms') return 'arms';
   if (bp === 'upper legs' || bp === 'lower legs') return 'legs';
   if (bp === 'waist') return 'core';
-  if (['chest', 'back', 'shoulders', 'cardio', 'neck'].includes(bp)) return bp;
+  if (['chest', 'back', 'shoulders', 'cardio', 'neck', 'football', 'padel'].includes(bp)) return bp; // sports rows use the sport as body part
   return 'other';
 }
 
 // Weeks in the training log start on Saturday (getDay() 6).
 const WEEK_START = 6;
 const weekdayIndex = (d) => (d.getDay() - WEEK_START + 7) % 7; // 0 = Saturday … 6 = Friday
+
+// Midnight starting a rolling window of `n` days that ends today (n = 7 → six days ago).
+function startOfLastDays(n, d = new Date()) {
+  return startOfDay(new Date(d.getFullYear(), d.getMonth(), d.getDate() - (n - 1), 12));
+}
+
+// Saturday 00:00 local of the training week containing `d` (stepped at noon: DST changes at midnight).
+function startOfTrainingWeek(d = new Date()) {
+  const noon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - weekdayIndex(d), 12);
+  return startOfDay(noon);
+}
 
 /**
  * GitHub-style calendar for one calendar year (1 Jan – 31 Dec), in Saturday-first week columns.
@@ -267,10 +309,11 @@ function trainingCalendar(rows, { year = new Date().getFullYear(), now = new Dat
   for (const row of rows) {
     if (!row.sets) continue;
     const key = dayKey(row.started_at);
-    if (!byDay.has(key)) byDay.set(key, { exercises: new Set(), areas: new Map(), workouts: new Set(), sets: 0 });
+    if (!byDay.has(key)) byDay.set(key, { exercises: new Set(), areas: new Map(), workouts: new Set(), sports: new Set(), sets: 0 });
     const d = byDay.get(key);
     d.exercises.add(row.exercise_id);
-    d.workouts.add(row.workout_id);
+    if (row.workout_id) d.workouts.add(row.workout_id);
+    if (row.sport_id) d.sports.add(row.sport_id);
     d.sets += row.sets;
     const area = areaOf(row.body_part, row.target);
     d.areas.set(area, (d.areas.get(area) || 0) + row.sets);
@@ -299,7 +342,8 @@ function trainingCalendar(rows, { year = new Date().getFullYear(), now = new Dat
       exercises: info ? info.exercises.size : 0,
       sets: info ? info.sets : 0,
       level: info ? exerciseLevel(info.exercises.size) : 0,
-      workoutId: info ? Math.min(...info.workouts) : null,
+      workoutId: info && info.workouts.size ? Math.min(...info.workouts) : null,
+      sportId: info && info.sports.size ? Math.min(...info.sports) : null,
       area: areas.length ? areas[0][0] : null,
       emoji: areas.length ? EMOJI[areas[0][0]] : null,
       areas: areas.map(([x]) => AREA_LABEL[x]),
@@ -312,5 +356,5 @@ function trainingCalendar(rows, { year = new Date().getFullYear(), now = new Dat
 module.exports = {
   REGIONS, BUCKETS, EMOJI, AREA_LABEL, TARGET_POINTS, SECONDARY_POINTS, TRAINED_THRESHOLD, MAX_POINTS,
   SYNERGIST_POINTS, MUSCLE_DEFAULTS_VERSION, isCompound, helperPoints, legacyMusclePoints,
-  regionOf, regionLabelOf, musclesInRegion, defaultMusclePoints, regionPoints, exerciseRegions, recencyBucket, intensity, daysBetween, muscleStatus, exerciseLevel, areaOf, trainingCalendar, dayKey, WEEK_START,
+  regionOf, regionLabelOf, musclesInRegion, addActivity, sportsOf, defaultMusclePoints, regionPoints, exerciseRegions, recencyBucket, intensity, daysBetween, muscleStatus, exerciseLevel, areaOf, trainingCalendar, dayKey, WEEK_START, weeklySets, startOfTrainingWeek, startOfLastDays,
 };

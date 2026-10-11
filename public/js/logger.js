@@ -8,6 +8,7 @@
   const KG_PER_LB = 0.45359237;
   const PLATES = { kg: [25, 20, 15, 10, 5, 2.5, 1.25, 0.5], lb: [45, 35, 25, 10, 5, 2.5] };
   const REST_OPTIONS = [0, 30, 45, 60, 90, 120, 150, 180, 240, 300];
+  const DEFAULT_REPS = 12; // same as DEFAULT_REPS in src/db.js
 
   const ICON = {
     check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
@@ -103,6 +104,13 @@
     return { weight: p.weight == null ? null : round(convert(p.weight, p.unit, unitOf(we)), 0.25), reps: p.reps, unit: p.unit, raw: p };
   }
 
+  // Reps shown as a grey hint: last time's reps for this set, else the default.
+  // Finishing (server side) fills a weight-only set with the same number.
+  function repsHint(we, index) {
+    const prev = prevFor(we, index);
+    return prev && prev.reps > 0 ? prev.reps : DEFAULT_REPS;
+  }
+
   function prevSummary(we) {
     if (!we.previous) return 'First time logging this';
     const sets = we.previous.sets.filter((s) => !s.is_warmup);
@@ -168,7 +176,7 @@
       <td><button type="button" class="set-no ${s.is_warmup ? 'warm' : ''}" data-act="warmup" title="${s.is_warmup ? 'Warm-up set. Tap to make it a working set' : 'Tap to mark as warm-up'}" aria-label="Set ${s.is_warmup ? 'warm-up' : workingNo}, toggle warm-up">${s.is_warmup ? 'W' : workingNo}</button></td>
       <td class="prev-cell">${esc(prevText)}</td>
       <td><input type="number" inputmode="decimal" step="any" min="0" data-field="weight" value="${s.weight ?? ''}" placeholder="${prev && prev.weight != null ? fmtW(prev.weight) : ''}" aria-label="Weight in ${unit}"></td>
-      <td><input type="number" inputmode="numeric" step="1" min="0" data-field="reps" value="${s.reps ?? ''}" placeholder="${prev && prev.reps != null ? prev.reps : ''}" aria-label="Reps"></td>
+      <td><input type="number" inputmode="numeric" step="1" min="0" data-field="reps" value="${s.reps ?? ''}" placeholder="${repsHint(we, index)}" aria-label="Reps"></td>
       <td><button type="button" class="check" data-act="done" aria-pressed="${s.done ? 'true' : 'false'}" aria-label="Mark set done">${icon('check')}</button></td>
       <td><button type="button" class="del-set" data-act="del-set" aria-label="Delete set">${icon('x')}</button></td>
     </tr>`;
@@ -178,7 +186,7 @@
     const unit = unitOf(we);
     let working = 0;
     const rows = we.sets.map((s, idx) => setRow(we, s, idx, s.is_warmup ? 0 : ++working)).join('');
-    const thumb = we.has_image ? `<img src="/media/${esc(we.exercise_id)}/image" alt="" width="52" height="52">` : `<span class="ph">${esc(we.name.charAt(0).toUpperCase())}</span>`;
+    const thumb = we.has_image ? `<img src="/media/${esc(we.exercise_id)}/image" alt="" width="52" height="52" data-anim="${esc(we.exercise_id)}">` : `<span class="ph">${esc(we.name.charAt(0).toUpperCase())}</span>`;
     return `<article class="lift" data-we="${we.id}">
       <header class="lift-head">
         ${thumb}
@@ -285,12 +293,7 @@
       if (!s.done) {
         const prev = prevFor(we, idx);
         if (s.weight == null && prev && prev.weight != null) patch.weight = prev.weight;
-        if (s.reps == null && prev && prev.reps != null) patch.reps = prev.reps;
-        if ((patch.reps ?? s.reps) == null) {
-          row.querySelector('input[data-field="reps"]').focus();
-          setSaveState('Enter reps before ticking the set off', true);
-          return;
-        }
+        if (s.reps == null) patch.reps = repsHint(we, idx);
       }
       await flushSet(s.id);
       const { set } = await api('PATCH', `/sets/${s.id}`, patch);
@@ -378,7 +381,7 @@
   const finishBtn = document.getElementById('finish');
   if (finishBtn) {
     finishBtn.addEventListener('click', async () => {
-      const done = state.workout.exercises.reduce((n, we) => n + we.sets.filter((s) => s.done || s.reps > 0).length, 0);
+      const done = state.workout.exercises.reduce((n, we) => n + we.sets.filter((s) => s.done || s.reps > 0 || s.weight != null).length, 0);
       const ok = await confirmDialog({
         title: 'Finish this workout?',
         message: done

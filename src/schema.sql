@@ -97,3 +97,14 @@ CREATE TABLE IF NOT EXISTS exercise_heads (
   points      INTEGER NOT NULL CHECK (points BETWEEN 0 AND 3),
   PRIMARY KEY (exercise_id, head)
 );
+
+-- Sports days (football, padel): the sports and their muscles live in src/lib/sports.js.
+CREATE TABLE IF NOT EXISTS sport_sessions (
+  id         INTEGER PRIMARY KEY,
+  sport      TEXT NOT NULL,
+  played_on  TEXT NOT NULL,          -- the day at local noon, like workouts.started_at
+  minutes    INTEGER NOT NULL CHECK (minutes > 0),
+  notes      TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_sport_sessions_played ON sport_sessions(played_on);

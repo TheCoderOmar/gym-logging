@@ -1,6 +1,7 @@
 const express = require('express');
 const { personalRecords, volume } = require('../lib/stats');
 const { convert } = require('../lib/units');
+const { historyType, historyKind, historyFilters, EMPTY } = require('../lib/history');
 
 const PAGE_SIZE = 25;
 
@@ -17,10 +18,23 @@ module.exports = (repo) => {
     res.redirect(`/workouts/${id}/log${routineId ? '' : '?add=1'}`);
   });
 
+  // History: workouts and sports sessions; ?type=workouts|sports filters, ?partial=1 returns just the list.
   router.get('/', (req, res) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const { total, rows } = repo.listWorkouts({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, unit: res.locals.unit });
-    res.render('workouts/index', { title: 'History', rows, total, page, pages: Math.max(1, Math.ceil(total / PAGE_SIZE)) });
+    const type = historyType(req.query.type);
+    const { total, rows } = repo.listHistory({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, unit: res.locals.unit, kind: historyKind(type) });
+    const link = (t, p = 1) => {
+      const qs = new URLSearchParams({ ...(t !== 'all' ? { type: t } : {}), ...(p > 1 ? { page: p } : {}) }).toString();
+      return { href: `/workouts${qs ? `?${qs}` : ''}`, fragment: `/workouts?${qs ? `${qs}&` : ''}partial=1` };
+    };
+    const list = {
+      rows, total, page, pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+      filters: historyFilters(type, (t) => link(t)),
+      pageLink: (p) => link(type, p),
+      emptyText: EMPTY[type],
+    };
+    if (req.query.partial) return res.render('partials/history-list', list);
+    res.render('workouts/index', { title: 'History', ...list, scripts: ['/js/history-filter.js'] });
   });
 
   router.get('/:id', (req, res, next) => {

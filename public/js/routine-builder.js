@@ -22,7 +22,7 @@
     list.innerHTML = items
       .map(
         (it, i) => `<li class="builder-item" data-i="${i}">
-        ${it.has_image ? `<img src="/media/${esc(it.exercise_id)}/image" alt="" width="56" height="56">` : `<span class="ph">${esc(it.name.charAt(0).toUpperCase())}</span>`}
+        ${it.has_image ? `<img src="/media/${esc(it.exercise_id)}/image" alt="" width="56" height="56" data-anim="${esc(it.exercise_id)}">` : `<span class="ph">${esc(it.name.charAt(0).toUpperCase())}</span>`}
         <div>
           <div class="name">${esc(it.name)}</div>
           <div class="targets">
@@ -70,7 +70,7 @@
 
   document.getElementById('r-add').addEventListener('click', () => {
     ExercisePicker.open((ex) => {
-      items.push({ exercise_id: ex.id, name: ex.name, target: ex.target, equipment: ex.equipment, has_image: ex.has_image, target_sets: 3, target_reps: '8-12', rest_seconds: 90 });
+      items.push({ exercise_id: ex.id, name: ex.name, target: ex.target, equipment: ex.equipment, has_image: ex.has_image, target_sets: 3, target_reps: '8-12', rest_seconds: 0 });
       dirty = true;
       render();
     });

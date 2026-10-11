@@ -305,3 +305,72 @@ test('editing a head does not freeze the other heads at a lowered muscle score',
   assert.equal(heads.find((h) => h.head === 'biceps_long').points, 3);
   assert.equal(heads.find((h) => h.head === 'biceps_short').edited, false); // never edited: stays automatic
 });
+
+test('new exercises in a workout start with no rest timer', () => {
+  const repo = freshDb();
+  const wid = repo.startWorkout();
+  repo.addWorkoutExercise(wid, '0001');
+  assert.equal(repo.getWorkout(wid).exercises[0].rest_seconds, 0);
+});
+
+test('finishing gives a set with a weight but no reps the default 12 reps', () => {
+  const repo = freshDb();
+  const wid = repo.startWorkout();
+  repo.addWorkoutExercise(wid, '0001');
+  const [s] = repo.getWorkout(wid).exercises[0].sets;
+  repo.updateSet(s.id, { weight: 60 }); // reps left on the 12 hint
+  repo.finishWorkout(wid);
+  const done = repo.getWorkout(wid).exercises[0].sets[0];
+  assert.equal(done.reps, 12);
+  assert.equal(done.done, 1);
+});
+
+test('sports sessions: log, edit, delete, and validation', () => {
+  const repo = freshDb();
+  const id = repo.logSport({ sport: 'football', date: '2026-10-08', minutes: 180, notes: 'Friday match' });
+  const s = repo.getSport(id);
+  assert.equal(s.sport, 'football');
+  assert.equal(s.minutes, 180);
+  assert.equal(new Date(s.played_on).getDate(), 8);
+  repo.updateSport(id, { sport: 'padel', date: '2026-10-09', minutes: 90, notes: '' });
+  assert.equal(repo.getSport(id).sport, 'padel');
+  assert.equal(repo.getSport(id).minutes, 90);
+  assert.equal(repo.sportSessionsSince('2026-10-01T00:00:00Z').length, 1);
+  assert.throws(() => repo.logSport({ sport: 'chess', date: '2026-10-08', minutes: 60 }), /Pick football or padel/);
+  assert.throws(() => repo.logSport({ sport: 'padel', date: '2026-10-08', minutes: 0 }), /How long/);
+  repo.deleteSport(id);
+  assert.equal(repo.getSport(id), undefined);
+});
+
+test('history mixes sports sessions and finished workouts, newest first', () => {
+  const repo = freshDb();
+  const w = repo.startWorkout({ date: '2026-10-05' });
+  repo.addWorkoutExercise(w, '0001');
+  repo.updateSet(repo.getWorkout(w).exercises[0].sets[0].id, { weight: 60, reps: 5, done: 1 });
+  repo.finishWorkout(w);
+  repo.logSport({ sport: 'football', date: '2026-10-07', minutes: 120 });
+  repo.logSport({ sport: 'padel', date: '2026-10-03', minutes: 60 });
+  const { total, rows } = repo.listHistory({ limit: 10 });
+  assert.equal(total, 3);
+  assert.deepEqual(rows.map((r) => r.kind), ['sport', 'workout', 'sport']);
+  assert.equal(rows[0].sport, 'football');
+  assert.equal(rows[1].set_count, 1);
+  assert.deepEqual(repo.listHistory({ limit: 1, offset: 1 }).rows.map((r) => r.kind), ['workout']);
+});
+
+test('history can be filtered to workouts or sports', () => {
+  const repo = freshDb();
+  const w = repo.startWorkout({ date: '2026-10-05' });
+  repo.addWorkoutExercise(w, '0001');
+  repo.updateSet(repo.getWorkout(w).exercises[0].sets[0].id, { weight: 60, reps: 5, done: 1 });
+  repo.finishWorkout(w);
+  repo.logSport({ sport: 'football', date: '2026-10-07', minutes: 120 });
+  repo.logSport({ sport: 'padel', date: '2026-10-03', minutes: 60 });
+  const sports = repo.listHistory({ kind: 'sport' });
+  assert.equal(sports.total, 2);
+  assert.deepEqual(sports.rows.map((r) => r.sport), ['football', 'padel']);
+  const workouts = repo.listHistory({ kind: 'workout' });
+  assert.equal(workouts.total, 1);
+  assert.deepEqual(workouts.rows.map((r) => r.kind), ['workout']);
+  assert.equal(repo.listHistory({ kind: 'nonsense' }).total, 3); // unknown → everything
+});

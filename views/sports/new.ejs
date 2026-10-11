@@ -1,0 +1,9 @@
+<%- include('../partials/head') %>
+<div class="page page-narrow">
+  <div class="page-head"><div><h1>Log sport</h1><p class="muted">How long you played, and it counts on your recovery map.</p></div></div>
+  <form class="form-grid sport-form" method="post" action="/sports">
+    <%- include('fields') %>
+    <div class="btn-row"><button class="btn btn-go btn-lg"><%- icon('check') %> Save session</button><a class="btn btn-quiet" href="/">Cancel</a></div>
+  </form>
+</div>
+<%- include('../partials/foot') %>

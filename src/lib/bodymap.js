@@ -1,6 +1,7 @@
 // Front and back body figures as inline SVG. Each muscle is drawn once for the
 // figure's left half and mirrored across x = 100 for the right half.
 const { hasHeads } = require('./heads');
+const { activityText } = require('./sports');
 
 const FRONT = {
   traps: ['M91,58 C86,65 78,70 68,74 L90,77 Z'],
@@ -49,7 +50,7 @@ function esc(s) {
 function describe(st) {
   if (!st || st.bucket === 'never') return `${st ? st.label : ''}: not trained yet`;
   const when = st.days === 0 ? 'today' : st.days === 1 ? 'yesterday' : `${st.days} days ago`;
-  return `${st.label}: trained ${when}, ${st.sets} ${st.sets === 1 ? 'set' : 'sets'} (score ${st.points})`;
+  return `${st.label}: trained ${when}, ${activityText(st)} (score ${st.points})`;
 }
 
 // Draw one figure. `decorate(regionId)` returns { cls, attrs, title } for each muscle group.
@@ -93,6 +94,16 @@ function muscleFilterMap(selected, labels) {
     };
   };
   return { front: figure('front', FRONT, decorate, 'pick'), back: figure('back', BACK, decorate, 'pick') };
+}
+
+// Sports session page: muscles shaded by how hard the sport works them (points 0–3 per region).
+function workMap(points, labels) {
+  const decorate = (id) => {
+    const p = points.get(id) || 0;
+    const text = p ? `${labels[id]}: ${p} ${p === 1 ? 'point' : 'points'} per 30 min` : `${labels[id]}: not worked`;
+    return { cls: `work-${p}`, attrs: `role="img" aria-label="${esc(text)}"`, title: text };
+  };
+  return { front: figure('front', FRONT, decorate, 'work'), back: figure('back', BACK, decorate, 'work') };
 }
 
 // Close-ups for the recovery-map popup: one muscle split into its heads (viewBox 0 0 200 240).
@@ -197,4 +208,4 @@ function headFigure(region, status) {
   </svg>`;
 }
 
-module.exports = { bodyMap, muscleFilterMap, describe, headFigure };
+module.exports = { bodyMap, muscleFilterMap, workMap, describe, headFigure };
