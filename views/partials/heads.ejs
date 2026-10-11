@@ -10,7 +10,7 @@
       <li>
         <span class="swatch b-<%= h.bucket %>" aria-hidden="true"></span>
         <strong><%= h.label %></strong>
-        <span class="muted"><%= when %><%= h.days == null ? '' : ' · ' + h.sets + (h.sets === 1 ? ' set' : ' sets') %></span>
+        <span class="muted"><%= when %><%= h.days == null ? '' : ' · ' + activityText(h) %></span>
       </li>
     <% } %>
   </ul>

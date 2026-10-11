@@ -32,13 +32,14 @@ src/lib/stats.js       e1RM (Epley), volume, PRs, session summaries
 src/lib/muscles.js     heat-map regions, muscle-name→region map, scoring rules, recency buckets, training-log calendar
 src/lib/bodymap.js     front/back body SVG generator (home heat map + library muscle picker) + muscle-head close-ups
 src/lib/heads.js       muscle heads: head list per region, name→head rules, effective head scores, headStatus
+src/lib/sports.js      sports days: football/padel muscle points, 30 min = 1 set, sportRows() → exerciseLog-shaped rows
 src/lib/format.js      date/number helpers exposed to views as `fmt`
 src/lib/icons.js       inline SVG icons exposed to views as `icon()`
 src/routes/*.js        one router per area; api.js = JSON for interactive pages
 views/                 EJS; partials/head.ejs + foot.ejs wrap every page
-public/js/             logger, routine builder, exercise picker/library, charts, home, toast, confirm, muscle-scores
+public/js/             logger, routine builder, exercise picker/library, charts, home, toast, confirm, muscle-scores, sports, media-hover (hover-to-play GIFs, loaded on every page)
 scripts/seed.js        dataset → DB, plus 4 starter routines
-test/                  lib.test.js, db.test.js (in-memory DB), muscles.test.js
+test/                  lib.test.js, db.test.js (in-memory DB), muscles.test.js, heads.test.js, sports.test.js
 ```
 
 ## Data model (SQLite, `db/gym.sqlite`, gitignored)
@@ -48,19 +49,24 @@ test/                  lib.test.js, db.test.js (in-memory DB), muscles.test.js
 - `exercise_muscles` — points per working set for each muscle an exercise lists (0–3). Defaults: target 3, helper 2 if it's a prime mover in a compound lift, else 1 (`defaultMusclePoints` in muscles.js). Editable per exercise; `muscle_defaults_version` setting upgrades unedited exercises when the rules change.
 - `routines`, `routine_exercises`; `workouts` (in progress while `finished_at` is NULL), `workout_exercises`, `sets` (weight + **unit stored per set**, reps, is_warmup, done)
 - `exercise_heads` — **only head scores Omar edited** (0–3). Defaults are never stored: they're computed from the exercise name by the rules in `heads.js`, so improving a rule reaches every unedited head. Only the heads actually edited are stored (storing the rest would freeze values capped by a temporarily lowered muscle score).
+- `sport_sessions` (sport, played_on at local noon, minutes, notes) — sports themselves and their muscles are defined in `src/lib/sports.js`, not in the DB.
 - `settings` (display_unit, bar_kg, bar_lb, muscle_defaults_version)
 
-Stats only count **working sets**: `done = 1 AND is_warmup = 0 AND reps > 0` (`WORKING_SQL` in db.js). Finishing a workout (or "Done editing" a finished one) auto-ticks every set that has reps, so Omar can just type weight × reps without tapping ✓.
+Stats only count **working sets**: `done = 1 AND is_warmup = 0 AND reps > 0` (`WORKING_SQL` in db.js). Finishing a workout (or "Done editing" a finished one) auto-ticks every set that has reps, so Omar can just type weight × reps without tapping ✓. A set with a weight but no reps gets the grey reps hint the logger showed: last time's reps for that set, else **12** (`DEFAULT_REPS`). New exercises in a workout or routine start with **rest 0** (`DEFAULT_REST_SECONDS`). Both are just defaults Omar can change.
 
 ## Domain rules worth knowing
 
 - **Units:** each set keeps the unit it was logged in; totals/charts/PRs convert to the Settings display unit. Switching an exercise's unit in the logger converts its sets (rounded to 0.25).
 - **Recovery heat map (Home):** per region, points = Σ sets × muscle score per day; a muscle counts as trained on a day at ≥ 3 points. Colour by days since: today red, 1–3 yellow, 4–5 green, 6+ blue, never grey. Fill opacity = intensity.
+- **Sets per muscle (Home, next to the map):** working sets each region got in the **last 7 days, rolling** (`weeklySets` + `startOfLastDays(7)` in muscles.js — Omar chose rolling after a Friday football session vanished when the Saturday week reset), weighted by score (target 1, 2-point helper ⅔, 1-point helper ⅓), with a 10–20 sets/week band and a key. Sports add a **green bonus segment** after the gym segment (same weight as the map: 30 min = 1 set × score/3); the number is the total, the row title shows the split ("6 gym + 6 sports"), and sports time is also listed underneath. Gym bars keep one colour; under-10 rows only dim the number. **10–20 (on target)** rows get a flickering two-tone flame (`flame` in icons.js) by the number and a slow shine over the filled bar; both stop under `prefers-reduced-motion`. Tones are judged on the **rounded number shown** (a "10" always gets its flame). It replaced a recency list that only repeated the map (Omar: the card should give *different* info). The "This week" stats card is the calendar week from Saturday (`startOfTrainingWeek`).
+- **Sports vs sets wording:** sport rows carry `sets` only as map weight (30 min = 1); anything shown to Omar says time played (`activityText`: "Football 3 h", "4 sets + Football 3 h").
 - **Muscle heads (Home):** clicking chest, shoulders, biceps, triceps, forearms, abs, quads or lats opens a popup (`GET /muscles/:region` fragment) with a close-up split into heads, coloured exactly like the map. Heads appear **only** there, never on the main figure (Omar's request). The dataset has no head data: rules guess from the exercise name (main head = the region score, "some" = 1), heads are capped at the exercise's region score, and a region scored 0 contributes nothing. Editable under "Heads" on each exercise page.
 - **Training log (Home):** calendar year Jan–Dec, **weeks start Saturday**, two views — exercise-count levels (1–3, 4, 5, 6, 7+) and an emoji per day for the most-trained area. Legend items are filters. Year paging (first logged year … +5) swaps the partial in place via `GET /training-log?year=`.
 - **Exercise library:** live search/filters and a clickable body figure (front/back toggle). Multiple muscles = exercises that work **all** of them (score > 0), ranked by combined score; falls back to closest matches with `partial`.
 - **Dates:** build day sequences by offset at **noon** (`new Date(y, 0, 1 + i, 12)`) — Egypt's DST changes at local midnight, stepping midnights drops days.
 - **Workouts are date-only** (Omar's request): no clock, start/finish times or duration anywhere. `started_at` holds the chosen day at local noon (`fmt.dayIso`); the logger has a date field (defaults to today, no future dates). `finished_at` is only the "finished" flag. Older workouts still have real times stored — never display them.
+- **Sports days:** "Log sport" on Home (shown even mid-workout) → `/sports/new`. Football ⚽ and padel 🎾 only. Every 30 minutes = 1 working set; each sport has fixed muscle points (0–3). `activityLog()` in `routes/home.js` merges `sportRows()` into the map, head popups and training log; `repo.listHistory({ kind })` mixes sessions with workouts in History and Home's "Recent activity", each with an All / Workouts / Sports filter (`src/lib/history.js`, swapped in place by `public/js/history-filter.js`). No emoji on sport rows, titles or the Log sport button (Omar's request) — only the calendar's emoji view uses ⚽/🎾. Session page `/sports/:id` shades the muscles it works, with edit and delete.
+- **Hover-to-play:** thumbnails with `data-anim="<id>"` grow into a playing preview on hover (picker, logger, routine builder); `data-anim-mode="swap"` plays in place (exercise library cards, with `data-anim-card` on the tile). Mouse only.
 - **Freestyle workouts:** Omar mostly trains without a routine. "Start workout" on Home opens the logger with the exercise picker already open (`?add=1`).
 
 ## UI conventions
@@ -68,6 +74,7 @@ Stats only count **working sets**: `done = 1 AND is_warmup = 0 AND reps > 0` (`W
 - Design tokens on `:root` in `public/css/app.css`, dark mode via `prefers-color-scheme` and `data-theme`. Plate colours (`--plate-red/blue/yellow/green`) mean weight/training; don't use them as decoration.
 - Fonts: Saira Semi Condensed (display/numbers), Atkinson Hyperlegible (body).
 - Every page must work at 390 px wide (bottom tab bar on mobile, side rail on desktop).
+- **Home top row:** map panel + 340 px side column (This week, Sets per muscle), sized up at Omar's request via `.home-grid …` overrides. On desktop both columns stretch to the same height so the card bottoms line up (Omar notices misalignment — check it after layout changes).
 - **No full-page reloads for in-page interactions** (Omar dislikes flicker): fetch and swap a fragment, `history.replaceState` the URL, fall back to a normal navigation on error.
 - Messages: redirect with `?msg=…` (`&tone=error` for errors) → shown as top-right stacking toasts (15 s, pause on hover). In JS use `window.toast(msg, { tone })`.
 - Destructive actions: add `data-confirm` (+ `data-confirm-title`, `data-confirm-label`) to the form, or `await confirmDialog({...})` in JS. Never `window.confirm`.

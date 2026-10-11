@@ -1,0 +1,38 @@
+<%- include('../partials/head') %>
+<div class="page page-narrow">
+  <p style="margin-bottom:14px"><a class="btn btn-sm btn-quiet" href="/workouts">History</a></p>
+  <div class="page-head">
+    <div>
+      <h1><%= sport.label %></h1>
+      <p class="muted"><%= fmt.weekday(s.played_on) %> <%= fmt.date(s.played_on, { year: 'numeric' }) %> · <%= sportDuration(s.minutes) %></p>
+    </div>
+  </div>
+
+  <% if (s.notes) { %><p class="notes" style="margin-bottom:20px"><%= s.notes %></p><% } %>
+
+  <section class="panel sport-body" aria-labelledby="sb-title">
+    <h2 id="sb-title">Muscles it works</h2>
+    <div class="figures">
+      <figure><%- figures.front %><figcaption>Front</figcaption></figure>
+      <figure><%- figures.back %><figcaption>Back</figcaption></figure>
+    </div>
+    <ul class="recency-key" aria-label="Shading key">
+      <li><span class="swatch work-3"></span>Main</li><li><span class="swatch work-2"></span>Solid</li><li><span class="swatch work-1"></span>Some</li>
+    </ul>
+  </section>
+
+  <div class="log-actions">
+    <form method="post" action="/sports/<%= s.id %>/delete" data-confirm-title="Delete this session?" data-confirm="It disappears from History and your recovery map. This can’t be undone." data-confirm-label="Delete">
+      <button class="btn btn-danger"><%- icon('trash') %> Delete session</button>
+    </form>
+  </div>
+
+  <details class="edit-meta">
+    <summary>Edit sport, date, time and notes</summary>
+    <form class="form-grid sport-form" method="post" action="/sports/<%= s.id %>/update">
+      <%- include('fields') %>
+      <div class="btn-row"><button class="btn btn-go">Save session</button></div>
+    </form>
+  </details>
+</div>
+<%- include('../partials/foot') %>

@@ -22,7 +22,7 @@ window.ExercisePicker = (() => {
     list.innerHTML = data.rows
       .map(
         (ex) => `<li><button type="button" data-id="${esc(ex.id)}">
-          ${ex.has_image ? `<img src="/media/${esc(ex.id)}/image" alt="" loading="lazy" width="48" height="48">` : `<span class="ph">${esc(ex.name.charAt(0).toUpperCase())}</span>`}
+          ${ex.has_image ? `<img src="/media/${esc(ex.id)}/image" alt="" loading="lazy" width="48" height="48" data-anim="${esc(ex.id)}">` : `<span class="ph">${esc(ex.name.charAt(0).toUpperCase())}</span>`}
           <span><strong>${esc(ex.name)}</strong><span>${esc(ex.target)} · ${esc(ex.equipment)}${ex.times_done ? ` · done ${ex.times_done}×` : ''}</span></span>
           ${ex.is_custom ? '<span class="chip chip-custom">Yours</span>' : ''}
         </button></li>`,

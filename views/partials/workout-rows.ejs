@@ -1,16 +1,25 @@
 <ul class="rows">
-  <% for (const w of rows) { %>
+  <% for (const w of rows) {
+    const day = w.kind === 'sport' ? w.played_on : w.started_at; %>
     <li>
-      <a class="row-link history-row" href="/workouts/<%= w.id %>">
-        <span class="when"><%= fmt.relDay(w.started_at) %><small><%= fmt.relDay(w.started_at) === fmt.date(w.started_at) ? fmt.weekday(w.started_at).slice(0, 3) : fmt.date(w.started_at) %></small></span>
-        <span class="what">
-          <strong><%= w.name %></strong>
-          <p><%= w.exercise_names || 'No exercises' %></p>
-        </span>
-        <span class="figures">
-          <span class="num"><%= fmt.num(w.volume) %> <%= unit %></span>
-          <%= w.set_count %> <%= w.set_count === 1 ? 'set' : 'sets' %>
-        </span>
+      <a class="row-link history-row" href="<%= w.kind === 'sport' ? '/sports/' + w.id : '/workouts/' + w.id %>">
+        <span class="when"><%= fmt.relDay(day) %><small><%= fmt.relDay(day) === fmt.date(day) ? fmt.weekday(day).slice(0, 3) : fmt.date(day) %></small></span>
+        <% if (w.kind === 'sport') { %>
+          <span class="what">
+            <strong><%= w.label %></strong>
+            <p><%= w.notes || 'Sports session' %></p>
+          </span>
+          <span class="row-figures"><span class="num"><%= sportDuration(w.minutes) %></span>played</span>
+        <% } else { %>
+          <span class="what">
+            <strong><%= w.name %></strong>
+            <p><%= w.exercise_names || 'No exercises' %></p>
+          </span>
+          <span class="row-figures">
+            <span class="num"><%= fmt.num(w.volume) %> <%= unit %></span>
+            <%= w.set_count %> <%= w.set_count === 1 ? 'set' : 'sets' %>
+          </span>
+        <% } %>
       </a>
     </li>
   <% } %>

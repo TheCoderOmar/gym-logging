@@ -24,7 +24,7 @@
       <div class="cal-grid" role="list">
         <% for (const d of days) {
              const label = fmt.date(d.date.toISOString(), { weekday: 'short', year: 'numeric' }) + ': ' + (d.exercises ? d.exercises + (d.exercises === 1 ? ' exercise' : ' exercises') + ', ' + d.sets + ' sets · ' + d.areas.join(', ') : 'rest day');
-        %><% if (d.outside) { %><span class="cell out" aria-hidden="true"></span><% } else if (d.future) { %><span class="cell l0 future" aria-hidden="true"></span><% } else if (d.workoutId) { %><a role="listitem" data-level="<%= d.level %>" data-areas="<%= d.areaKeys.join(' ') %>" class="cell l<%= d.level %><%= d.today ? ' is-today' : '' %>" href="/workouts/<%= d.workoutId %>" title="<%= label %>" aria-label="<%= label %>"><span class="emo"><%= d.emoji %></span></a><% } else { %><span role="listitem" class="cell l0<%= d.today ? ' is-today' : '' %>" title="<%= label %>"></span><% } %><% } %>
+        %><% if (d.outside) { %><span class="cell out" aria-hidden="true"></span><% } else if (d.future) { %><span class="cell l0 future" aria-hidden="true"></span><% } else if (d.workoutId || d.sportId) { %><a role="listitem" data-level="<%= d.level %>" data-areas="<%= d.areaKeys.join(' ') %>" class="cell l<%= d.level %><%= d.today ? ' is-today' : '' %>" href="<%= d.workoutId ? '/workouts/' + d.workoutId : '/sports/' + d.sportId %>" title="<%= label %>" aria-label="<%= label %>"><span class="emo"><%= d.emoji %></span></a><% } else { %><span role="listitem" class="cell l0<%= d.today ? ' is-today' : '' %>" title="<%= label %>"></span><% } %><% } %>
       </div>
     </div>
   </div>

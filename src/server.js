@@ -19,6 +19,8 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(ROOT, 'views'));
 app.locals.fmt = fmt;
 Object.assign(app.locals, require('./lib/icons'));
+app.locals.sportDuration = require('./lib/sports').duration;
+app.locals.activityText = require('./lib/sports').activityText;
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -45,6 +47,7 @@ app.use('/', require('./routes/home')(repo));
 app.use('/exercises', require('./routes/exercises')(repo));
 app.use('/routines', require('./routes/routines')(repo));
 app.use('/workouts', require('./routes/workouts')(repo));
+app.use('/sports', require('./routes/sports')(repo));
 app.use('/progress', require('./routes/progress')(repo));
 app.use('/settings', require('./routes/settings')(repo));
 

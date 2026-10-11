@@ -9,11 +9,14 @@
       <h1 id="start-title"><%= live ? 'You’re mid-workout' : greeting %></h1>
       <p class="muted"><%= live ? live.name + ' (' + fmt.relDay(live.started_at) + ') is still open.' : (totals.workouts ? 'Check what’s recovered, then pick a session.' : 'Log a workout and this page fills in with what you’ve trained.') %></p>
     </div>
-    <% if (live) { %>
-      <a class="btn btn-go btn-lg" href="/workouts/<%= live.id %>/log"><%- icon('play') %> Back to workout</a>
-    <% } else { %>
-      <form method="post" action="/workouts/start"><button class="btn btn-go btn-lg"><%- icon('plus') %> Start workout</button></form>
-    <% } %>
+    <div class="btn-row home-actions">
+      <a class="btn btn-lg" href="/sports/new">Log sport</a>
+      <% if (live) { %>
+        <a class="btn btn-go btn-lg" href="/workouts/<%= live.id %>/log"><%- icon('play') %> Back to workout</a>
+      <% } else { %>
+        <form method="post" action="/workouts/start"><button class="btn btn-go btn-lg"><%- icon('plus') %> Start workout</button></form>
+      <% } %>
+    </div>
   </section>
 
   <% if (!live && routines.length) { %>
@@ -51,13 +54,31 @@
         </div>
       </section>
 
-      <section class="panel recovery-list" aria-labelledby="rec-title">
-        <h2 id="rec-title" class="sr-only">Muscles by last trained</h2>
-        <% for (const g of groups) { if (!g.muscles.length) continue; %>
-          <div class="rec-group">
-            <h3><span class="swatch b-<%= g.id %>" aria-hidden="true"></span><%= g.label %></h3>
-            <p><%= g.muscles.map((m) => m.label).join(', ') %></p>
-          </div>
+      <% const SCALE = Math.max(25, ...weekSets.map((w) => w.total)), LOW = 10, HIGH = 20;
+         const pct = (n) => Math.min(100, (n / SCALE) * 100).toFixed(1);
+         const count = (n) => (n > 0 && n < 1 ? '<1' : String(Math.round(n))); %>
+      <section class="panel week-sets" aria-labelledby="ws-title">
+        <h2 id="ws-title">Sets per muscle</h2>
+        <p class="muted small">Working sets in the last 7 days. Sports add a bonus: every 30 minutes counts like a set.</p>
+        <ul class="ws-list" style="--lo: <%= pct(LOW) %>%; --hi: <%= pct(HIGH) %>%">
+          <% for (const w of weekSets) {
+            const shown = Math.round(w.total); // judge by the number shown, so a "10" always gets its flame
+            const tone = w.total === 0 ? 'none' : shown < LOW ? 'low' : shown > HIGH ? 'high' : 'ok';
+            const split = w.sport ? `${count(w.sets)} gym + ${count(w.sport)} sports` : `${count(w.sets)} gym`; %>
+            <li class="ws-<%= tone %>" title="<%= w.label %>: <%= split %>">
+              <span class="ws-name"><%= w.label %></span>
+              <span class="ws-track" aria-hidden="true" style="--fill: <%= pct(w.total) %>%"><span class="ws-fill" style="width: <%= pct(w.sets) %>%"></span><span class="ws-fill ws-sport" style="left: <%= pct(w.sets) %>%; width: <%= pct(w.sport) %>%"></span></span>
+              <span class="ws-num"><% if (tone === 'ok') { %><%- flame %><% } %><%= count(w.total) %><span class="sr-only"> sets (<%= split %>)<%= tone === 'low' ? ', below target' : tone === 'ok' ? ', on target' : '' %></span></span>
+            </li>
+          <% } %>
+        </ul>
+        <ul class="ws-key" aria-label="Key">
+          <li><span class="k k-gym"></span>Gym</li>
+          <li><span class="k k-sport"></span>Sports</li>
+          <li><span class="k k-band"></span><%= LOW %>–<%= HIGH %> sets: a good target for 7 days</li>
+        </ul>
+        <% if (weekSports.length) { %>
+          <p class="ws-sports">Sports in the last 7 days: <%= weekSports.map((s) => s.label + ' ' + sportDuration(s.minutes)).join(' · ') %></p>
         <% } %>
       </section>
     </aside>
@@ -69,17 +90,10 @@
 
   <section class="section" aria-labelledby="recent-title">
     <div class="section-head">
-      <h2 id="recent-title">Recent workouts</h2>
-      <% if (recent.length) { %><a href="/workouts">All history</a><% } %>
+      <h2 id="recent-title">Recent activity</h2>
+      <a href="/workouts">All history</a>
     </div>
-    <% if (!recent.length) { %>
-      <div class="empty">
-        <h3>No workouts yet</h3>
-        <p>Finished workouts land here with their sets, volume and duration.</p>
-      </div>
-    <% } else { %>
-      <%- include('partials/workout-rows', { rows: recent }) %>
-    <% } %>
+    <%- include('partials/history-list', recent) %>
   </section>
 </div>
 <%- include('partials/foot') %>

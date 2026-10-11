@@ -1,0 +1,39 @@
+<%# Shared by "Log sport" and the session's edit form. Expects s, sports, works. %>
+<fieldset class="sport-pick">
+  <legend>Sport</legend>
+  <% for (const [key, sp] of Object.entries(sports)) { %>
+    <label class="sport-card">
+      <input type="radio" name="sport" value="<%= key %>" <%= s.sport === key ? 'checked' : '' %> required>
+      <span class="sport-emoji" aria-hidden="true"><%= sp.emoji %></span>
+      <span><%= sp.label %></span>
+    </label>
+  <% } %>
+</fieldset>
+
+<div class="two">
+  <div class="field"><label for="sport-date">Date</label><input id="sport-date" type="date" name="date" value="<%= fmt.dayInput(s.played_on) %>" max="<%= fmt.dayInput(new Date()) %>" required></div>
+  <div class="field">
+    <span class="label" id="dur-label">How long</span>
+    <div class="dur" role="group" aria-labelledby="dur-label">
+      <label><input type="number" name="hours" min="0" max="24" step="1" inputmode="numeric" value="<%= Math.floor(s.minutes / 60) %>" aria-label="Hours"> h</label>
+      <label><input type="number" name="minutes" min="0" max="59" step="5" inputmode="numeric" value="<%= s.minutes % 60 %>" aria-label="Minutes"> min</label>
+    </div>
+    <div class="dur-chips">
+      <% for (const m of [60, 90, 120, 180]) { %><button type="button" class="chip-btn" data-minutes="<%= m %>"><%= sportDuration(m) %></button><% } %>
+    </div>
+  </div>
+</div>
+
+<div class="field"><label for="sport-notes">Notes <small>(optional)</small></label><textarea id="sport-notes" name="notes" placeholder="Match, training, who you played with…"><%= s.notes || '' %></textarea></div>
+
+<div class="works-most" aria-live="polite">
+  <% for (const [key, list] of Object.entries(works)) { %>
+    <div data-works="<%= key %>" <%= s.sport === key ? '' : 'hidden' %>>
+      <h3>Works most</h3>
+      <ul>
+        <% for (const w of list) { %><li><span class="dots" aria-label="<%= w.points %> of 3"><% for (let i = 1; i <= 3; i++) { %><i class="<%= i <= w.points ? 'on' : '' %>"></i><% } %></span><%= w.label %></li><% } %>
+      </ul>
+      <p class="muted small">Every 30 minutes counts like one working set on your recovery map.</p>
+    </div>
+  <% } %>
+</div>

@@ -111,3 +111,36 @@ test('default helper scores: 2 for prime movers in compound lifts, 1 otherwise',
   assert.deepEqual(pts('abs', ['obliques', 'hip flexors'], 'crunch floor'), { abs: 3, obliques: 2, 'hip flexors': 1 });
   assert.deepEqual(pts('triceps', ['forearms'], 'cable pushdown'), { triceps: 3, forearms: 1 });
 });
+
+test('weeklySets counts gym sets per muscle by score, and sports separately as a bonus', () => {
+  const rows = [
+    { started_at: daysAgo(0), sets: 3, name: 'barbell bench press', target: 'pectorals', secondary_muscles: ['triceps', 'shoulders'],
+      muscles: [{ muscle: 'pectorals', points: 3 }, { muscle: 'triceps', points: 2 }, { muscle: 'shoulders', points: 1 }] },
+    { started_at: daysAgo(1), sets: 4, name: 'cable pushdown', target: 'triceps', secondary_muscles: [], muscles: [] },
+    { started_at: daysAgo(0), sport_id: 1, name: 'Football', minutes: 180, sets: 6, target: '', secondary_muscles: [], muscles: [{ muscle: 'quads', points: 3 }] },
+  ];
+  const week = Object.fromEntries(m.weeklySets(rows).map((r) => [r.region, r]));
+  assert.equal(week.chest.sets, 3);
+  assert.equal(week.triceps.sets, 6); // 3 × 2/3 + 4
+  assert.equal(week.shoulders.sets, 1); // 3 × 1/3
+  assert.equal(week.quads.sets, 0); // no gym sets…
+  assert.equal(week.quads.sport, 6); // …but 3 h of football = 6 sets' worth
+  assert.equal(week.quads.total, 6);
+  assert.equal(week.chest.sport, 0);
+  assert.deepEqual(m.weeklySets(rows).slice(0, 2).map((r) => r.region).sort(), ['quads', 'triceps']); // most (total) first
+  assert.equal(m.weeklySets(rows).length, m.REGIONS.length);
+});
+
+test('training weeks start on Saturday', () => {
+  const sat = m.startOfTrainingWeek(new Date(2026, 9, 10, 15)); // Sat 10 Oct
+  assert.equal(sat.getDay(), 6);
+  assert.equal(sat.getDate(), 10);
+  assert.equal(m.startOfTrainingWeek(new Date(2026, 9, 9, 15)).getDate(), 3); // Fri 9 → Sat 3
+});
+
+test('the last 7 days start at midnight six days before today', () => {
+  const start = m.startOfLastDays(7, new Date(2026, 9, 11, 15)); // Sun 11 Oct, afternoon
+  assert.equal(start.getDate(), 5);
+  assert.equal(start.getHours(), 0);
+  assert.equal(m.startOfLastDays(1, new Date(2026, 9, 11, 15)).getDate(), 11);
+});

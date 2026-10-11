@@ -3,6 +3,7 @@ const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { KG_PER_LB, convert, isUnit } = require('./lib/units');
 const { dayIso } = require('./lib/format');
+const { SPORTS, isSport } = require('./lib/sports');
 const { defaultMusclePoints, legacyMusclePoints, musclesInRegion, REGIONS, MAX_POINTS, MUSCLE_DEFAULTS_VERSION } = require('./lib/muscles');
 const { HEAD_GROUPS, hasHeads, exerciseHeads, regionLabel } = require('./lib/heads');
 
@@ -13,6 +14,9 @@ const SCHEMA = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 // Weight of a set in kg, as a SQL expression over the `sets` table alias `s`.
 const KG_SQL = `(CASE WHEN s.unit = 'lb' THEN s.weight * ${KG_PER_LB} ELSE s.weight END)`;
 const WORKING_SQL = 's.done = 1 AND s.is_warmup = 0 AND s.reps > 0';
+// Logger defaults (Omar's choice); both can be changed per set / per exercise.
+const DEFAULT_REPS = 12;
+const DEFAULT_REST_SECONDS = 0;
 
 function openDb(file = DEFAULT_PATH) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -444,7 +448,7 @@ function createRepo(db) {
           id, ex.exercise_id, i,
           clampInt(ex.target_sets, 1, 20, 3),
           String(ex.target_reps || '8-12').slice(0, 20),
-          clampInt(ex.rest_seconds, 0, 900, 90),
+          clampInt(ex.rest_seconds, 0, 900, DEFAULT_REST_SECONDS),
         );
       });
       return id;
@@ -484,7 +488,7 @@ function createRepo(db) {
     return { workout_id: last.id, date: last.started_at, sets };
   }
 
-  function insertWorkoutExercise(workoutId, exerciseId, restSeconds = 90) {
+  function insertWorkoutExercise(workoutId, exerciseId, restSeconds = DEFAULT_REST_SECONDS) {
     const pos = get('SELECT COALESCE(MAX(position) + 1, 0) AS p FROM workout_exercises WHERE workout_id = ?', workoutId).p;
     return Number(
       run('INSERT INTO workout_exercises (workout_id, exercise_id, position, rest_seconds) VALUES (?, ?, ?, ?)', workoutId, exerciseId, pos, restSeconds)
@@ -557,6 +561,16 @@ function createRepo(db) {
 
   function finishWorkout(id) {
     return tx(() => {
+      // A set with a weight but no reps takes the reps hint the logger showed:
+      // last time's reps for that set, else DEFAULT_REPS.
+      for (const we of all('SELECT id, exercise_id FROM workout_exercises WHERE workout_id = ?', id)) {
+        const prev = previousSets(we.exercise_id, id);
+        all('SELECT id, reps, weight FROM sets WHERE workout_exercise_id = ? ORDER BY set_number', we.id).forEach((s, i) => {
+          if (s.weight == null || s.reps != null) return;
+          const p = prev && prev.sets[i];
+          run('UPDATE sets SET reps = ? WHERE id = ?', p && p.reps > 0 ? p.reps : DEFAULT_REPS, s.id);
+        });
+      }
       // A set with reps counts as done even if it was never ticked off.
       run(
         `UPDATE sets SET done = 1 WHERE done = 0 AND reps > 0
@@ -578,8 +592,39 @@ function createRepo(db) {
     run('DELETE FROM workouts WHERE id = ?', id);
   }
 
+  // History: finished workouts and sports sessions together, newest first.
+  // Rows are workout rows (as listWorkouts, kind 'workout') or sessions (kind 'sport').
+  // `kind`: 'workout' or 'sport' to show only those; anything else shows both.
+  function listHistory({ limit = 20, offset = 0, unit = displayUnit(), kind = 'all' } = {}) {
+    const wantWorkouts = kind !== 'sport';
+    const wantSports = kind !== 'workout';
+    const total =
+      (wantWorkouts ? get('SELECT COUNT(*) AS n FROM workouts WHERE finished_at IS NOT NULL').n : 0) +
+      (wantSports ? get('SELECT COUNT(*) AS n FROM sport_sessions').n : 0);
+    const parts = [
+      wantWorkouts && "SELECT 'workout' AS kind, id, started_at AS day FROM workouts WHERE finished_at IS NOT NULL",
+      wantSports && "SELECT 'sport' AS kind, id, played_on AS day FROM sport_sessions",
+    ].filter(Boolean);
+    const page = all(`${parts.join(' UNION ALL ')} ORDER BY day DESC, kind DESC, id DESC LIMIT ? OFFSET ?`, limit, offset);
+    const ids = (kind) => page.filter((p) => p.kind === kind).map((p) => p.id);
+    const inList = (list) => `(${list.map(() => '?').join(', ') || 'NULL'})`;
+    const workouts = new Map(workoutRows(`w.id IN ${inList(ids('workout'))}`, ids('workout'), unit).map((r) => [r.id, r]));
+    const sports = new Map(all(`SELECT * FROM sport_sessions WHERE id IN ${inList(ids('sport'))}`, ...ids('sport')).map((r) => [r.id, r]));
+    const rows = page.map((p) =>
+      p.kind === 'workout'
+        ? { kind: 'workout', ...workouts.get(p.id) }
+        : { kind: 'sport', ...sports.get(p.id), label: SPORTS[sports.get(p.id).sport]?.label, emoji: SPORTS[sports.get(p.id).sport]?.emoji },
+    );
+    return { total, rows };
+  }
+
   function listWorkouts({ limit = 20, offset = 0, unit = displayUnit() } = {}) {
     const total = get('SELECT COUNT(*) AS n FROM workouts WHERE finished_at IS NOT NULL').n;
+    return { total, rows: workoutRows('w.finished_at IS NOT NULL', [], unit, 'LIMIT ? OFFSET ?', [limit, offset]) };
+  }
+
+  // Finished-workout summary rows (counts, volume, exercise names) for History and Home.
+  function workoutRows(whereSql, params, unit, tailSql = '', tailParams = []) {
     const rows = all(
       `SELECT w.*,
               (SELECT COUNT(*) FROM workout_exercises we WHERE we.workout_id = w.id) AS exercise_count,
@@ -590,11 +635,45 @@ function createRepo(db) {
               (SELECT GROUP_CONCAT(name, ' · ') FROM (
                   SELECT e.name FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id
                    WHERE we.workout_id = w.id ORDER BY we.position)) AS exercise_names
-         FROM workouts w WHERE w.finished_at IS NOT NULL
-        ORDER BY w.started_at DESC, w.id DESC LIMIT ? OFFSET ?`,
-      limit, offset,
+         FROM workouts w WHERE ${whereSql}
+        ORDER BY w.started_at DESC, w.id DESC ${tailSql}`,
+      ...params, ...tailParams,
     );
-    return { total, rows: rows.map((r) => ({ ...r, volume: Math.round(convert(r.volume_kg, 'kg', unit)) })) };
+    return rows.map((r) => ({ ...r, volume: Math.round(convert(r.volume_kg, 'kg', unit)) }));
+  }
+
+  /* ---------- sports days ---------- */
+
+  function sportFields({ sport, date, minutes, notes }) {
+    if (!isSport(sport)) throw new Error('Pick football or padel');
+    const m = Number(minutes);
+    if (!Number.isInteger(m) || m <= 0 || m > 24 * 60) throw new Error('How long did you play? Enter hours and minutes');
+    const day = dayIso(date);
+    if (!day) throw new Error('Pick the date you played');
+    return { sport, played_on: day, minutes: m, notes: String(notes || '').trim() || null };
+  }
+
+  function logSport(fields) {
+    const f = sportFields(fields);
+    return Number(run('INSERT INTO sport_sessions (sport, played_on, minutes, notes) VALUES (?, ?, ?, ?)', f.sport, f.played_on, f.minutes, f.notes).lastInsertRowid);
+  }
+
+  function getSport(id) {
+    return get('SELECT * FROM sport_sessions WHERE id = ?', id);
+  }
+
+  function updateSport(id, fields) {
+    if (!getSport(id)) throw new Error('Session not found');
+    const f = sportFields(fields);
+    run('UPDATE sport_sessions SET sport = ?, played_on = ?, minutes = ?, notes = ? WHERE id = ?', f.sport, f.played_on, f.minutes, f.notes, id);
+  }
+
+  function deleteSport(id) {
+    run('DELETE FROM sport_sessions WHERE id = ?', id);
+  }
+
+  function sportSessionsSince(isoStart) {
+    return all('SELECT * FROM sport_sessions WHERE played_on >= ? ORDER BY played_on', isoStart);
   }
 
   function workoutToRoutine(workoutId) {
@@ -813,7 +892,8 @@ function createRepo(db) {
     getExerciseHeads, setExerciseHeads, resetExerciseHeads,
     listRoutines, getRoutine, saveRoutine, deleteRoutine,
     lastUnitFor, previousSets, startWorkout, inProgressWorkout, getWorkout, updateWorkout,
-    finishWorkout, deleteWorkout, listWorkouts, workoutToRoutine,
+    finishWorkout, deleteWorkout, listWorkouts, listHistory, workoutToRoutine,
+    logSport, getSport, updateSport, deleteSport, sportSessionsSince,
     addWorkoutExercise, removeWorkoutExercise, moveWorkoutExercise, updateWorkoutExercise,
     addSet, updateSet, setExerciseUnit, deleteSet,
     exerciseSets, exercisesWithHistory, statsSince, totals, workoutVolumes, bodyPartSets, exerciseLog,

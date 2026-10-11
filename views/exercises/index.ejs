@@ -71,9 +71,9 @@
           <ul class="ex-grid">
             <% for (const ex of rows) { %>
               <li>
-                <a class="ex-tile" href="/exercises/<%= ex.id %>">
+                <a class="ex-tile" href="/exercises/<%= ex.id %>" data-anim-card>
                   <div class="ex-thumb">
-                    <% if (ex.has_image) { %><img src="/media/<%= ex.id %>/image" alt="" loading="lazy" width="180" height="180"><% } else { %><span class="ph"><%= ex.name.charAt(0).toUpperCase() %></span><% } %>
+                    <% if (ex.has_image) { %><img src="/media/<%= ex.id %>/image" alt="" loading="lazy" width="180" height="180" data-anim="<%= ex.id %>" data-anim-mode="swap"><% } else { %><span class="ph"><%= ex.name.charAt(0).toUpperCase() %></span><% } %>
                   </div>
                   <strong><%= ex.name %></strong>
                   <span><%= fmt.cap(ex.target) %> · <%= ex.equipment %><% if (ex.times_done) { %> · done <%= ex.times_done %>×<% } %></span>
