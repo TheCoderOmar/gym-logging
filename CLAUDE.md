@@ -80,6 +80,15 @@ Stats only count **working sets**: `done = 1 AND is_warmup = 0 AND reps > 0` (`W
 - Destructive actions: add `data-confirm` (+ `data-confirm-title`, `data-confirm-label`) to the form, or `await confirmDialog({...})` in JS. Never `window.confirm`.
 - Copy: sentence case, plain verbs, buttons say what happens ("Delete routine", "Finish workout").
 
+## iPhone app (`/m`, branch `iphone-offline`, Oct 2026)
+
+Offline home-screen web app: logs workouts/sports at the gym with no connection, shows the map/heads/sets-per-muscle/history from a local snapshot, and **Sync** (home Wi-Fi, PC app running) sends phone records to the PC and pulls a fresh snapshot.
+- Static app in `public/m/` (`index.html`, `app.js` hash-routed screens, `store.js` IndexedDB kv: `snap`/`pending`/`live`/`lastSync`, `sw.js` service worker, `m.css`, manifest + icons). `src/routes/mobile.js` serves `src/lib/*` wrapped for `public/m/require.js` — the phone runs the **same** map/heads/sets/sports code (test in `test/mobile.test.js` checks the SVG matches).
+- `POST /api/sync` → `repo.importFromPhone` (idempotent by `client_id`, all-or-nothing, finished via `finishWorkout`) + `repo.snapshotForPhone`. v1: phone creates; editing PC history stays on the PC.
+- iOS needs https for offline web apps: `node scripts/make-cert.js` → gitignored `certs/` (local CA + 397-day server cert); server also listens on `HTTPS_PORT` (3443) when certs exist; phone needs `HOST=0.0.0.0`. CA download: `/m/ca.crt`. Re-run make-cert if the PC's IP changes.
+- Compressed animations: `python scripts/make-mobile-media.py` → gitignored `mobile-media/` (160 px WebP, ~57 MB), downloaded by the phone after a sync.
+- Test on desktop at `http://localhost:<port>/m/` (localhost counts as secure, so the service worker runs); offline via CDP `Network.emulateNetworkConditions` (also on the service-worker target).
+
 ## Liftmanual import (Oct 2026)
 
 `scripts/scrape-liftmanual.js` → `scripts/match-liftmanual.py` → `scripts/import-liftmanual.js` (cache in gitignored `scrape/`; personal use only, never publish). Matching is by animation fingerprint (dHash of frame 0), then name. Applied 2026-10-15: 890 exercises got 360×360 media, 1,674 new exercises `L0001…` (ids fixed in `scrape/liftmanual/ids.json`). Backup from just before: `db/backups/before-liftmanual-2026-10-15.sqlite` — to roll back, stop the server and copy it over `db/gym.sqlite` (delete `gym.sqlite-wal`/`-shm`). Seed keeps WebP media; media is served `no-cache` so replaced files show up.

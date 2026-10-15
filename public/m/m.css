@@ -1,0 +1,53 @@
+/* iPhone app (/m): only what differs from the main stylesheet. */
+.m-app main { margin-left: 0; padding: calc(16px + env(safe-area-inset-top)) 16px calc(var(--tabbar) + 32px + env(safe-area-inset-bottom)); }
+.m-app .rail { display: none; }
+.m-app .tabbar {
+  position: fixed; inset: auto 0 0 0; z-index: 20; display: grid; grid-template-columns: repeat(5, 1fr);
+  height: calc(var(--tabbar) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+  background: var(--sheet); border-top: 1px solid var(--rule);
+}
+.m-app .tabbar a {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  font-size: 0.6875rem; font-weight: 700; color: var(--steel); text-decoration: none;
+}
+.m-app .tabbar a svg { width: 22px; height: 22px; }
+.m-app .tabbar a[aria-current='page'] { color: var(--iron); }
+.m-app .tabbar a[aria-current='page'] svg { color: var(--go); }
+.m-app .home-grid { grid-template-columns: 1fr; }
+.m-app .home-actions { justify-content: flex-start; }
+.m-sync-link { color: inherit; }
+
+.m-toast {
+  position: fixed; z-index: 70; left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top));
+  padding: 12px 16px; border-radius: var(--r-md); background: var(--iron); color: var(--chalk);
+  font-weight: 700; box-shadow: 0 10px 30px rgba(15, 20, 25, 0.3);
+}
+.m-toast.is-error { background: var(--plate-red); color: #fff; }
+
+.m-sync { display: grid; gap: 10px; margin-bottom: 16px; }
+.m-sync h2 { font-size: 1.125rem; }
+.m-progress { height: 10px; border-radius: 999px; background: var(--wash); overflow: hidden; }
+.m-progress span { display: block; height: 100%; background: var(--go); transition: width 0.3s; }
+
+.m-ex { display: grid; gap: 16px; }
+.m-ex .m-ex-anim { width: 100%; max-width: 320px; aspect-ratio: 1; object-fit: contain; background: #fff; border-radius: var(--r-md); }
+.m-ex .ph.m-ex-anim { display: grid; place-items: center; font: 800 3rem var(--display); color: var(--steel); }
+.m-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 12px 0 0; }
+.m-facts dt { color: var(--rubber); }
+.m-facts dd { margin: 0; font-weight: 700; }
+#ex-q { margin-bottom: 8px; }
+.m-ex-list { padding: 0; }
+.m-ex-row {
+  display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: center; padding: 8px 6px;
+  border-radius: var(--r-sm); color: inherit; text-decoration: none;
+}
+.m-ex-row img, .m-ex-row .ph { width: 48px; height: 48px; border-radius: var(--r-sm); background: #fff; object-fit: contain; }
+.m-ex-row .ph { display: grid; place-items: center; font: 800 1.1rem var(--display); color: var(--steel); }
+.m-ex-row strong { display: block; }
+.m-ex-row strong::first-letter { text-transform: uppercase; }
+.m-ex-row span span { font-size: 0.8125rem; color: var(--rubber); }
+.detail-lift-gif.ph { display: grid; place-items: center; }
+
+/* The shared dialog element switches between the picker and the heads popup. */
+dialog#dlg.picker[open] { display: flex; flex-direction: column; }
+dialog#dlg.picker .picker-head { gap: 8px; }
