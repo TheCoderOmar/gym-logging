@@ -1,7 +1,7 @@
 <%- include('../partials/head') %>
 <div class="page page-narrow">
-  <p style="margin-bottom:14px"><a class="btn btn-sm btn-quiet" href="/workouts">History</a></p>
-  <div class="page-head">
+  <a class="back-btn" href="/workouts"><%- icon('left') %> History</a>
+  <div class="page-head page-head-center">
     <div>
       <h1><%= w.name %></h1>
       <p class="muted"><%= fmt.weekday(w.started_at) %> <%= fmt.date(w.started_at, { year: 'numeric' }) %><%=w.routine_name ? ' · from ' + w.routine_name : '' %></p>
@@ -20,7 +20,13 @@
   <div class="detail-lifts">
     <% for (const we of w.exercises) { %>
       <section class="detail-lift">
-        <h3><a href="/exercises/<%= we.exercise_id %>"><%= we.name %></a><span class="muted small num"><%= fmt.num(we.volume) %> <%= unit %></span></h3>
+        <h3>
+          <a class="detail-lift-name" href="/exercises/<%= we.exercise_id %>">
+            <% if (we.has_gif || we.has_image) { %><img class="detail-lift-gif" src="/media/<%= we.exercise_id %>/<%= we.has_gif ? 'gif' : 'image' %>" alt="" width="64" height="64" loading="lazy"><% } else { %><span class="detail-lift-gif ph"><%= we.name.charAt(0).toUpperCase() %></span><% } %>
+            <span><%= we.name %></span>
+          </a>
+          <span class="muted small num"><%= fmt.num(we.volume) %> <%= unit %></span>
+        </h3>
         <table>
           <thead><tr><th>Set</th><th>Weight</th><th>Reps</th><th><span class="sr-only">Notes</span></th></tr></thead>
           <tbody>

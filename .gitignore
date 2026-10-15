@@ -9,3 +9,6 @@ images/
 videos/
 
 .claude/settings.local.json
+
+# Scraped third-party pages/media (personal use only, never publish)
+scrape/
