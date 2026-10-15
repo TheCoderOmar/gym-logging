@@ -7,10 +7,10 @@ module.exports = (repo) => {
     const kind = req.params.kind === 'gif' ? 'gif' : 'image';
     const media = repo.getMedia(req.params.id, kind);
     if (!media || !media.data) return res.status(404).end();
-    // Custom exercises can have their media replaced, so cache them briefly.
-    const maxAge = req.params.id.startsWith('C') ? 60 : 60 * 60 * 24 * 30;
+    // Media can be replaced at the same URL (custom uploads, the sharper liftmanual imports), so the
+    // browser revalidates every time; Express's ETag turns repeat loads into a cheap 304.
     res.set('Content-Type', media.mime || 'application/octet-stream');
-    res.set('Cache-Control', `public, max-age=${maxAge}`);
+    res.set('Cache-Control', 'no-cache');
     res.send(Buffer.from(media.data));
   });
 

@@ -80,6 +80,10 @@ Stats only count **working sets**: `done = 1 AND is_warmup = 0 AND reps > 0` (`W
 - Destructive actions: add `data-confirm` (+ `data-confirm-title`, `data-confirm-label`) to the form, or `await confirmDialog({...})` in JS. Never `window.confirm`.
 - Copy: sentence case, plain verbs, buttons say what happens ("Delete routine", "Finish workout").
 
+## Liftmanual import (Oct 2026)
+
+`scripts/scrape-liftmanual.js` → `scripts/match-liftmanual.py` → `scripts/import-liftmanual.js` (cache in gitignored `scrape/`; personal use only, never publish). Matching is by animation fingerprint (dHash of frame 0), then name. Applied 2026-10-15: 890 exercises got 360×360 media, 1,674 new exercises `L0001…` (ids fixed in `scrape/liftmanual/ids.json`). Backup from just before: `db/backups/before-liftmanual-2026-10-15.sqlite` — to roll back, stop the server and copy it over `db/gym.sqlite` (delete `gym.sqlite-wal`/`-shm`). Seed keeps WebP media; media is served `no-cache` so replaced files show up.
+
 ## Open item: exercise animations look choppy (parked by Omar, Oct 2026)
 
 Omar finds the exercise GIFs choppy ("two or three frames") and wants them smooth. He'll decide later — **don't start on this without him**.

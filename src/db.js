@@ -93,7 +93,12 @@ function createRepo(db) {
       params.push(`%${word}%`);
     }
     if (body_part) { where.push('e.body_part = ?'); params.push(body_part); }
-    if (equipment) { where.push('e.equipment = ?'); params.push(equipment); }
+    if (equipment) {
+      // Comma-separated list: one equipment tile can cover several dataset values.
+      const list = equipment.split(',').map((x) => x.trim()).filter(Boolean);
+      where.push(`e.equipment IN (${list.map(() => '?').join(', ')})`);
+      params.push(...list);
+    }
     if (target) { where.push('e.target = ?'); params.push(target); }
     if (custom) where.push('e.is_custom = 1');
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -531,7 +536,7 @@ function createRepo(db) {
     const workout = get('SELECT w.*, r.name AS routine_name FROM workouts w LEFT JOIN routines r ON r.id = w.routine_id WHERE w.id = ?', id);
     if (!workout) return null;
     const exercises = all(
-      `SELECT we.*, e.name, e.body_part, e.equipment, e.target, (m.image IS NOT NULL) AS has_image
+      `SELECT we.*, e.name, e.body_part, e.equipment, e.target, (m.image IS NOT NULL) AS has_image, (m.gif IS NOT NULL) AS has_gif
          FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id
          LEFT JOIN exercise_media m ON m.exercise_id = e.id
         WHERE we.workout_id = ? ORDER BY we.position`,

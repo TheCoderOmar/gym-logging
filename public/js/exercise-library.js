@@ -27,6 +27,7 @@
 
   function markSet() {
     form.querySelectorAll('select').forEach((s) => s.classList.toggle('is-set', !!s.value));
+    document.querySelectorAll('[data-equip]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.equip === form.elements.equipment.value)));
     markPicker();
   }
 
@@ -132,6 +133,15 @@
   });
   form.addEventListener('change', (e) => {
     if (e.target.tagName !== 'SELECT') return;
+    markSet();
+    load(urlFromForm());
+  });
+  // Equipment tiles: one at a time; tapping the active one clears it.
+  document.getElementById('equip-strip')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-equip]');
+    if (!b) return;
+    const input = form.elements.equipment;
+    input.value = input.value === b.dataset.equip ? '' : b.dataset.equip;
     markSet();
     load(urlFromForm());
   });

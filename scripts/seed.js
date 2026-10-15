@@ -81,7 +81,9 @@ function seed(repo, { log = console.log } = {}) {
   const upsertMedia = repo.db.prepare(`
     INSERT INTO exercise_media (exercise_id, image, image_mime, gif, gif_mime) VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(exercise_id) DO UPDATE SET
-      image = excluded.image, image_mime = excluded.image_mime, gif = excluded.gif, gif_mime = excluded.gif_mime`);
+      image = excluded.image, image_mime = excluded.image_mime, gif = excluded.gif, gif_mime = excluded.gif_mime
+    -- Keep the sharper media from scripts/import-liftmanual.js (animated WebP) instead of the 180px GIFs.
+    WHERE exercise_media.gif_mime IS NOT 'image/webp'`);
 
   repo.tx(() => {
     exercises.forEach((ex, i) => {

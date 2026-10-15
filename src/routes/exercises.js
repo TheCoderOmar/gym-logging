@@ -37,6 +37,23 @@ module.exports = (repo) => {
     }));
   }
 
+  // Equipment filter tiles on the library page. A tile's value can list several dataset values.
+  const EQUIPMENT_TILES = [
+    { label: 'Body weight', icon: 'bodyweight', value: 'body weight' },
+    { label: 'Dumbbell', icon: 'dumbbell', value: 'dumbbell' },
+    { label: 'Barbell', icon: 'barbell', value: 'barbell,olympic barbell,trap bar' },
+    { label: 'EZ bar', icon: 'ezbar', value: 'ez barbell' },
+    { label: 'Cable', icon: 'cable', value: 'cable' },
+    { label: 'Machine', icon: 'machine', value: 'leverage machine,machine,sled machine' },
+    { label: 'Smith', icon: 'smith', value: 'smith machine' },
+    { label: 'Kettlebell', icon: 'kettlebell', value: 'kettlebell' },
+    { label: 'Band', icon: 'band', value: 'band,resistance band' },
+    { label: 'Suspension', icon: 'suspension', value: 'suspension trainer' },
+    { label: 'Plate', icon: 'plate', value: 'weight plate' },
+    { label: 'Balls', icon: 'ball', value: 'medicine ball,stability ball,bosu ball' },
+    { label: 'Pull-up bar', icon: 'pullup', value: 'pull-up bar' },
+  ];
+
   router.get('/', (req, res) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const filters = {
@@ -53,7 +70,7 @@ module.exports = (repo) => {
     const qs = (p) => new URLSearchParams({ ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)), ...(filters.custom ? { custom: '1' } : {}), page: p }).toString();
     res.render('exercises/index', {
       title: 'Exercises',
-      filters, rows, total, page, partial,
+      filters, rows, total, page, partial, equipmentTiles: EQUIPMENT_TILES,
       regions: regions.map((id) => ({ id, label: REGION_LABELS[id] })),
       figures: muscleFilterMap(new Set(regions), REGION_LABELS),
       pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
