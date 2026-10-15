@@ -685,6 +685,9 @@ a.cell:hover, a.cell:focus-visible { outline: 2px solid var(--iron); outline-off
 /* ---------- picker dialog ---------- */
 dialog.picker {
   width: min(640px, calc(100vw - 24px)); max-height: min(720px, calc(100vh - 48px));
+  /* A real height so the results list gets the space (Safari collapsed it to nothing);
+     dvh follows the iPhone keyboard. */
+  height: min(720px, calc(100vh - 48px)); height: min(720px, calc(100dvh - 48px));
   padding: 0; border: 0; border-radius: var(--r-md); background: var(--chalk); color: var(--iron);
   box-shadow: 0 24px 60px rgba(15, 20, 25, 0.35);
 }
@@ -693,7 +696,7 @@ dialog.picker::backdrop { background: rgba(15, 20, 25, 0.5); }
 .picker-head { padding: 16px 16px 12px; display: grid; gap: 10px; border-bottom: 1px solid var(--rule); background: var(--sheet); }
 .picker-head .top { display: flex; justify-content: space-between; align-items: center; }
 .picker-head .filters2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.picker-results { overflow-y: auto; list-style: none; margin: 0; padding: 6px; flex: 1; }
+.picker-results { overflow-y: auto; list-style: none; margin: 0; padding: 6px; flex: 1 1 auto; min-height: 0; }
 .picker-results button {
   width: 100%; display: grid; grid-template-columns: 48px 1fr auto; gap: 12px; align-items: center; text-align: left;
   padding: 6px 8px; border: 0; border-radius: var(--r-sm); background: transparent; color: inherit; font: inherit; cursor: pointer;

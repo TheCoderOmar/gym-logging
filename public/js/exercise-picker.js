@@ -51,6 +51,12 @@ window.ExercisePicker = (() => {
     if (onPick) onPick(ex);
   });
   q.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      search();
+      q.blur(); // phones: Search/Return hides the keyboard so the results show
+      return;
+    }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       list.querySelector('button')?.focus();
