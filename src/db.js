@@ -18,11 +18,22 @@ const WORKING_SQL = 's.done = 1 AND s.is_warmup = 0 AND s.reps > 0';
 const DEFAULT_REPS = 12;
 const DEFAULT_REST_SECONDS = 0;
 
+// Columns added after a table already existed (CREATE TABLE IF NOT EXISTS won't add them).
+function migrate(db) {
+  const has = (table, col) => db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
+  // client_id: the phone's id for a workout/sport it logged offline, so syncing twice never duplicates.
+  for (const table of ['workouts', 'sport_sessions']) {
+    if (!has(table, 'client_id')) db.exec(`ALTER TABLE ${table} ADD COLUMN client_id TEXT`);
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${table}_client ON ${table}(client_id) WHERE client_id IS NOT NULL`);
+  }
+}
+
 function openDb(file = DEFAULT_PATH) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;');
   db.exec(SCHEMA);
+  migrate(db);
   const repo = createRepo(db);
   repo.ensureExerciseMuscles();
   return repo;
@@ -38,8 +49,19 @@ function createRepo(db) {
   const get = (sql, ...p) => stmt(sql).get(...p);
   const run = (sql, ...p) => stmt(sql).run(...p);
 
+  // Re-entrant: a tx() inside another just joins the outer transaction.
+  let txDepth = 0;
   function tx(fn) {
+    if (txDepth > 0) {
+      txDepth++;
+      try {
+        return fn();
+      } finally {
+        txDepth--;
+      }
+    }
     db.exec('BEGIN');
+    txDepth = 1;
     try {
       const result = fn();
       db.exec('COMMIT');
@@ -47,6 +69,8 @@ function createRepo(db) {
     } catch (err) {
       db.exec('ROLLBACK');
       throw err;
+    } finally {
+      txDepth = 0;
     }
   }
 
@@ -647,6 +671,107 @@ function createRepo(db) {
     return rows.map((r) => ({ ...r, volume: Math.round(convert(r.volume_kg, 'kg', unit)) }));
   }
 
+  /* ---------- iPhone offline app: sync ---------- */
+
+  const clientId = (rec, what) => {
+    const id = typeof rec.client_id === 'string' ? rec.client_id.trim() : '';
+    if (!id || id.length > 64) throw new Error(`${what} is missing its client_id`);
+    return id;
+  };
+
+  // Records the phone logged offline → finished workouts and sports sessions. Idempotent by
+  // client_id (a repeated sync adds nothing) and all-or-nothing (one transaction).
+  function importFromPhone({ workouts = [], sports = [] } = {}) {
+    return tx(() => {
+      let addedW = 0;
+      let addedS = 0;
+      for (const w of workouts) {
+        const cid = clientId(w, 'A workout');
+        if (get('SELECT 1 FROM workouts WHERE client_id = ?', cid)) continue;
+        const day = dayIso(w.date);
+        if (!day) throw new Error('A workout from the phone has no valid date');
+        const id = Number(
+          run('INSERT INTO workouts (name, notes, started_at, client_id) VALUES (?, ?, ?, ?)',
+            String(w.name || '').trim() || 'Workout', String(w.notes || '').trim() || null, day, cid).lastInsertRowid,
+        );
+        for (const we of w.exercises || []) {
+          const exId = String(we.exercise_id || '');
+          if (!get('SELECT 1 FROM exercises WHERE id = ?', exId)) throw new Error(`Unknown exercise ${exId}`);
+          const weId = insertWorkoutExercise(id, exId, clampInt(we.rest_seconds, 0, 900, DEFAULT_REST_SECONDS));
+          for (const s of we.sets || []) {
+            const num = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+            const setId = insertSet(weId, {
+              weight: num(s.weight),
+              unit: isUnit(s.unit) ? s.unit : displayUnit(),
+              reps: num(s.reps) == null ? null : Math.max(0, Math.round(num(s.reps))),
+              is_warmup: s.is_warmup ? 1 : 0,
+            });
+            if (s.done) run('UPDATE sets SET done = 1 WHERE id = ?', setId);
+          }
+        }
+        finishWorkout(id); // same rules as the PC: auto-tick sets with reps, default reps, drop empty sets
+        addedW++;
+      }
+      for (const s of sports) {
+        const cid = clientId(s, 'A sports session');
+        if (get('SELECT 1 FROM sport_sessions WHERE client_id = ?', cid)) continue;
+        const sid = logSport({ sport: s.sport, date: s.date, minutes: s.minutes, notes: s.notes });
+        run('UPDATE sport_sessions SET client_id = ? WHERE id = ?', cid, sid);
+        addedS++;
+      }
+      return { workouts: addedW, sports: addedS };
+    });
+  }
+
+  // Everything the phone needs to work offline: exercises (with scores), the last year of
+  // workouts and sports, routines and settings.
+  function snapshotForPhone({ days = 365 } = {}) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const muscles = new Map();
+    for (const r of all('SELECT exercise_id, muscle, points FROM exercise_muscles ORDER BY exercise_id, position')) {
+      if (!muscles.has(r.exercise_id)) muscles.set(r.exercise_id, []);
+      muscles.get(r.exercise_id).push({ muscle: r.muscle, points: r.points });
+    }
+    const heads = new Map();
+    for (const r of all('SELECT exercise_id, head, points FROM exercise_heads')) {
+      if (!heads.has(r.exercise_id)) heads.set(r.exercise_id, []);
+      heads.get(r.exercise_id).push({ head: r.head, points: r.points });
+    }
+    const exercises = all(
+      `SELECT e.id, e.name, e.body_part, e.equipment, e.target, e.secondary_muscles, e.instruction_steps, e.is_custom,
+              (m.gif IS NOT NULL) AS has_gif
+         FROM exercises e LEFT JOIN exercise_media m ON m.exercise_id = e.id`,
+    ).map((e) => ({
+      ...e,
+      secondary_muscles: JSON.parse(e.secondary_muscles || '[]'),
+      steps: (JSON.parse(e.instruction_steps || '{}').en) || [],
+      instruction_steps: undefined,
+      muscles: muscles.get(e.id) || getExerciseMuscles(e.id), // defaults when none are stored yet
+      heads: heads.get(e.id) || [],
+    }));
+    const workouts = all('SELECT id FROM workouts WHERE finished_at IS NOT NULL AND started_at >= ? ORDER BY started_at', since).map((r) => {
+      const w = getWorkout(r.id);
+      return {
+        id: w.id, client_id: w.client_id || `pc-${w.id}`, name: w.name, notes: w.notes, started_at: w.started_at,
+        exercises: w.exercises.map((we) => ({
+          exercise_id: we.exercise_id, rest_seconds: we.rest_seconds,
+          sets: we.sets.map((s) => ({ weight: s.weight, unit: s.unit, reps: s.reps, is_warmup: s.is_warmup, done: s.done })),
+        })),
+      };
+    });
+    const sports = all('SELECT * FROM sport_sessions WHERE played_on >= ? ORDER BY played_on', since).map((s) => ({
+      id: s.id, client_id: s.client_id || `pc-s${s.id}`, sport: s.sport, played_on: s.played_on, minutes: s.minutes, notes: s.notes,
+    }));
+    return {
+      generated_at: new Date().toISOString(),
+      settings: { display_unit: displayUnit(), bar: { kg: Number(getSetting('bar_kg', '20')), lb: Number(getSetting('bar_lb', '45')) } },
+      exercises,
+      workouts,
+      sports,
+      routines: listRoutines(),
+    };
+  }
+
   /* ---------- sports days ---------- */
 
   function sportFields({ sport, date, minutes, notes }) {
@@ -898,7 +1023,7 @@ function createRepo(db) {
     listRoutines, getRoutine, saveRoutine, deleteRoutine,
     lastUnitFor, previousSets, startWorkout, inProgressWorkout, getWorkout, updateWorkout,
     finishWorkout, deleteWorkout, listWorkouts, listHistory, workoutToRoutine,
-    logSport, getSport, updateSport, deleteSport, sportSessionsSince,
+    logSport, getSport, updateSport, deleteSport, sportSessionsSince, importFromPhone, snapshotForPhone,
     addWorkoutExercise, removeWorkoutExercise, moveWorkoutExercise, updateWorkoutExercise,
     addSet, updateSet, setExerciseUnit, deleteSet,
     exerciseSets, exercisesWithHistory, statsSince, totals, workoutVolumes, bodyPartSets, exerciseLog,
