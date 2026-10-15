@@ -14,6 +14,15 @@ const SCHEMA = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 // Weight of a set in kg, as a SQL expression over the `sets` table alias `s`.
 const KG_SQL = `(CASE WHEN s.unit = 'lb' THEN s.weight * ${KG_PER_LB} ELSE s.weight END)`;
 const WORKING_SQL = 's.done = 1 AND s.is_warmup = 0 AND s.reps > 0';
+// Exercise name with spaces and common punctuation removed, for searchExercises.
+const SQUEEZED_NAME = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(e.name), ' ', ''), '-', ''), '''', ''), '(', ''), ')', '')";
+// Search words → squeezed stems: lower-case, punctuation gone, a plural "s" dropped.
+function searchStems(q) {
+  return String(q || '').toLowerCase().split(/\s+/)
+    .map((w) => w.replace(/[^a-z0-9.]/g, '').replace(/(?<=[a-z]{2})s$/, ''))
+    .filter(Boolean);
+}
+
 // Logger defaults (Omar's choice); both can be changed per set / per exercise.
 const DEFAULT_REPS = 12;
 const DEFAULT_REST_SECONDS = 0;
@@ -112,8 +121,10 @@ function createRepo(db) {
   function searchExercises({ q = '', body_part = '', equipment = '', target = '', custom = false, regions = [], limit = 60, offset = 0 } = {}) {
     const where = [];
     const params = [];
-    for (const word of q.trim().toLowerCase().split(/\s+/).filter(Boolean)) {
-      where.push('LOWER(e.name) LIKE ?');
+    // Forgiving match: case, hyphens/spaces/punctuation and a plural "s" don't matter
+    // ("Pull ups" and "pullup" both find "pull-up").
+    for (const word of searchStems(q)) {
+      where.push(`${SQUEEZED_NAME} LIKE ?`);
       params.push(`%${word}%`);
     }
     if (body_part) { where.push('e.body_part = ?'); params.push(body_part); }

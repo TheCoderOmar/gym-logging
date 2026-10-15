@@ -374,3 +374,11 @@ test('history can be filtered to workouts or sports', () => {
   assert.deepEqual(workouts.rows.map((r) => r.kind), ['workout']);
   assert.equal(repo.listHistory({ kind: 'nonsense' }).total, 3); // unknown → everything
 });
+
+test('search ignores plural s, hyphens and case ("Pull ups" finds pull-up)', () => {
+  const repo = freshDb();
+  repo.db.prepare('INSERT INTO exercises (id, name, body_part, equipment, target) VALUES (?, ?, ?, ?, ?)').run('0009', 'pull-up', 'back', 'body weight', 'lats');
+  assert.ok(repo.searchExercises({ q: 'Pull ups' }).rows.some((r) => r.id === '0009'));
+  assert.ok(repo.searchExercises({ q: 'pullup' }).rows.some((r) => r.id === '0009'));
+  assert.ok(repo.searchExercises({ q: 'squats' }).rows.some((r) => r.id === '0002'));
+});

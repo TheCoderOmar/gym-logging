@@ -19,6 +19,15 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  // Same forgiving search as the PC (src/db.js searchStems): case, punctuation and a plural "s"
+  // don't matter, so "Pull ups" finds "pull-up".
+  function squeeze(name) { return String(name).toLowerCase().replace(/[\s\-'()]/g, ''); }
+  function stems(q) {
+    return String(q || '').toLowerCase().split(/\s+/).map(function (w) {
+      return w.replace(/[^a-z0-9.]/g, '').replace(/([a-z]{2})s$/, '$1');
+    }).filter(Boolean);
+  }
+  function matches(e, words) { var n = squeeze(e.name); return words.every(function (w) { return n.indexOf(w) >= 0; }); }
   function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
   function uuid() {
     return (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -257,16 +266,16 @@
     var parts = Array.from(new Set(S.snap.exercises.map(function (e) { return e.body_part; }))).sort();
     dlg.className = 'picker';
     dlg.innerHTML = '<div class="picker-head"><div class="top"><h2>Add exercise</h2><button type="button" class="btn btn-sm btn-quiet" data-close aria-label="Close">' + icon('x') + '</button></div>' +
-      '<input id="pk-q" type="search" placeholder="Search ' + S.snap.exercises.length.toLocaleString() + ' exercises" autocomplete="off">' +
+      '<input id="pk-q" type="search" enterkeyhint="search" placeholder="Search ' + S.snap.exercises.length.toLocaleString() + ' exercises" autocomplete="off">' +
       '<select id="pk-part" aria-label="Body part"><option value="">Any body part</option>' + parts.map(function (p) { return '<option>' + esc(p) + '</option>'; }).join('') + '</select></div>' +
       '<ul class="picker-results" id="pk-list"></ul>';
     var done = new Map();
     workouts().forEach(function (w) { w.exercises.forEach(function (we) { done.set(we.exercise_id, (done.get(we.exercise_id) || 0) + 1); }); });
     function search() {
-      var words = document.getElementById('pk-q').value.toLowerCase().split(/\s+/).filter(Boolean);
+      var words = stems(document.getElementById('pk-q').value);
       var part = document.getElementById('pk-part').value;
       var hits = S.snap.exercises.filter(function (e) {
-        return (!part || e.body_part === part) && words.every(function (w) { return e.name.indexOf(w) >= 0; });
+        return (!part || e.body_part === part) && matches(e, words);
       }).sort(function (a, b) { return (done.get(b.id) || 0) - (done.get(a.id) || 0) || (a.name < b.name ? -1 : 1); }).slice(0, 60);
       document.getElementById('pk-list').innerHTML = hits.map(function (e) {
         return '<li><button type="button" data-pick="' + esc(e.id) + '">' + thumb(e.id) + '<span><strong>' + esc(e.name) + '</strong><span>' + esc(e.target) + ' · ' + esc(e.equipment) + (done.get(e.id) ? ' · done ' + done.get(e.id) + '×' : '') + '</span></span></button></li>';
@@ -385,10 +394,9 @@
   function renderExercises() {
     setNav('exercises');
     if (!S.snap) { view.innerHTML = needsSync(); return; }
-    view.innerHTML = '<div class="page-head"><div><h1>Exercises</h1></div></div><input id="ex-q" type="search" placeholder="Search ' + S.snap.exercises.length.toLocaleString() + ' exercises" autocomplete="off"><ul class="picker-results m-ex-list" id="ex-list"></ul>';
+    view.innerHTML = '<div class="page-head"><div><h1>Exercises</h1></div></div><input id="ex-q" type="search" enterkeyhint="search" placeholder="Search ' + S.snap.exercises.length.toLocaleString() + ' exercises" autocomplete="off"><ul class="picker-results m-ex-list" id="ex-list"></ul>';
     function search() {
-      var words = document.getElementById('ex-q').value.toLowerCase().split(/\s+/).filter(Boolean);
-      var hits = S.snap.exercises.filter(function (e) { return words.every(function (w) { return e.name.indexOf(w) >= 0; }); }).slice(0, 80);
+      var hits = S.snap.exercises.filter(function (e) { return matches(e, stems(document.getElementById('ex-q').value)); }).slice(0, 80);
       document.getElementById('ex-list').innerHTML = hits.map(function (e) {
         return '<li><a class="m-ex-row" href="#/ex/' + encodeURIComponent(e.id) + '">' + thumb(e.id) + '<span><strong>' + esc(e.name) + '</strong><span>' + esc(e.target) + ' · ' + esc(e.equipment) + '</span></span></a></li>';
       }).join('');
@@ -575,6 +583,14 @@
     if (e.target === dlg || e.target.closest('[data-close]')) { dlg.close(); return; }
     var pick = e.target.closest('[data-pick]');
     if (pick) addExercise(pick.dataset.pick);
+  });
+
+  // Search fields: the keyboard's Search/Return key closes the keyboard so the results show.
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.matches && e.target.matches('input[type="search"]')) {
+      e.preventDefault();
+      e.target.blur();
+    }
   });
 
   /* ---------- routing + start ---------- */
