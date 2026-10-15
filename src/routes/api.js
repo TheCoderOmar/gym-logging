@@ -56,6 +56,12 @@ module.exports = (repo) => {
     res.json({ heads: repo.resetExerciseHeads(String(req.params.id), String(req.body.region || '')) });
   });
 
+  // iPhone app: send what it logged offline, get back a fresh snapshot to work from.
+  router.post('/sync', (req, res) => {
+    const imported = repo.importFromPhone({ workouts: req.body.workouts || [], sports: req.body.sports || [] });
+    res.json({ imported, snapshot: repo.snapshotForPhone() });
+  });
+
   router.get('/workouts/:id', (req, res) => {
     const state = workoutState(id(req));
     if (!state) return res.status(404).json({ error: 'Workout not found' });

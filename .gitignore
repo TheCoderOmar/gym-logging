@@ -12,3 +12,7 @@ videos/
 
 # Scraped third-party pages/media (personal use only, never publish)
 scrape/
+
+# Local https for the iPhone app (private keys — never commit)
+certs/
+mobile-media/

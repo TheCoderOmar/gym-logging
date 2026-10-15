@@ -1,3 +1,4 @@
+const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const { openDb } = require('./db');
@@ -23,7 +24,7 @@ app.locals.sportDuration = require('./lib/sports').duration;
 app.locals.activityText = require('./lib/sports').activityText;
 
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // the iPhone app's sync can carry weeks of offline workouts
 app.use(express.static(path.join(ROOT, 'public')));
 app.use('/vendor/chart.js', express.static(path.join(ROOT, 'node_modules', 'chart.js', 'dist')));
 app.use('/fonts', express.static(path.join(ROOT, 'node_modules', '@fontsource', 'saira-semi-condensed', 'files'), { maxAge: '365d' }));
@@ -43,6 +44,7 @@ app.use((req, res, next) => {
 
 app.use('/media', require('./routes/media')(repo));
 app.use('/api', require('./routes/api')(repo));
+app.use('/m', require('./routes/mobile')());
 app.use('/', require('./routes/home')(repo));
 app.use('/exercises', require('./routes/exercises')(repo));
 app.use('/routines', require('./routes/routines')(repo));
@@ -64,6 +66,19 @@ app.use((err, req, res, next) => {
 app.listen(PORT, HOST, () => {
   console.log(`Gym Log running at http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
 });
+
+// The iPhone app needs https (Safari only allows offline web apps on secure origins).
+// Listens when `node scripts/make-cert.js` has made certs/; the phone uses the LAN address.
+const CERTS = path.join(ROOT, 'certs');
+if (fs.existsSync(path.join(CERTS, 'server.crt'))) {
+  const HTTPS_PORT = Number(process.env.HTTPS_PORT) || 3443;
+  const tls = { key: fs.readFileSync(path.join(CERTS, 'server.key')), cert: fs.readFileSync(path.join(CERTS, 'server.crt')) };
+  require('node:https').createServer(tls, app).listen(HTTPS_PORT, HOST, () => {
+    const lan = Object.values(require('node:os').networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal);
+    const where = HOST === '0.0.0.0' && lan ? lan.address : HOST;
+    console.log(`iPhone app: https://${where}:${HTTPS_PORT}/m${HOST === '0.0.0.0' ? '' : '  (start with HOST=0.0.0.0 to reach it from the phone)'}`);
+  });
+}
 
 process.on('SIGINT', () => {
   repo.close();
