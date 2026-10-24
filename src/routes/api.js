@@ -58,8 +58,14 @@ module.exports = (repo) => {
 
   // iPhone app: send what it logged offline, get back a fresh snapshot to work from.
   router.post('/sync', (req, res) => {
-    const imported = repo.importFromPhone({ workouts: req.body.workouts || [], sports: req.body.sports || [] });
-    res.json({ imported, snapshot: repo.snapshotForPhone() });
+    const body = req.body || {};
+    try {
+      const imported = repo.importFromPhone({ workouts: body.workouts || [], sports: body.sports || [] });
+      res.json({ imported, snapshot: repo.snapshotForPhone() });
+    } catch (err) {
+      console.error('[sync] failed:', err);
+      res.status(400).json({ error: err.message });
+    }
   });
 
   router.get('/workouts/:id', (req, res) => {
