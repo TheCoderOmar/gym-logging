@@ -51,3 +51,15 @@
 /* The shared dialog element switches between the picker and the heads popup. */
 dialog#dlg.picker[open] { display: flex; flex-direction: column; }
 dialog#dlg.picker .picker-head { gap: 8px; }
+
+#hist-q { margin-bottom: 12px; }
+
+/* Logger cards: thumbnail, set numbers, × buttons and "Add set" all sit 12px in from the card edge,
+   and a done row's tint stays inside the card. */
+.m-app .lift-head { padding: 12px 12px 8px; }
+.m-app .set-table { width: calc(100% - 18px); margin: 0 9px; }
+.m-app .set-table td:last-child, .m-app .set-table th:last-child { padding-right: 0; }
+.m-app .lift-foot { padding: 6px 12px 12px; }
+.m-ex-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.m-ex-filters select:first-child { grid-column: 1 / -1; }
+.m-ex-filters select { min-width: 0; }

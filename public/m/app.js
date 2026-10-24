@@ -53,8 +53,9 @@
 
   function workouts() {
     var pc = (S.snap ? S.snap.workouts : []).map(function (w) { return Object.assign({ pending: false }, w); });
-    var mine = S.pending.workouts.map(function (w) { return Object.assign({ pending: true, started_at: F.dayIso(w.date) }, w); });
-    return pc.concat(mine).sort(function (a, b) { return a.started_at < b.started_at ? 1 : -1; });
+    var mine = S.pending.workouts.map(function (w) { return Object.assign({ pending: true }, w, { started_at: F.dayIso(w.date) }); });
+    var edited = new Set(mine.map(function (w) { return w.client_id; }));
+    return pc.filter(function (w) { return !edited.has(w.client_id); }).concat(mine).sort(function (a, b) { return a.started_at < b.started_at ? 1 : -1; });
   }
   function sports() {
     var pc = (S.snap ? S.snap.sports : []).map(function (s) { return Object.assign({ pending: false }, s); });
@@ -185,6 +186,7 @@
     setNav('log');
     if (!S.snap) { view.innerHTML = needsSync(); return; }
     var fresh = !S.live;
+    var editing = S.live && S.live.editing;
     if (fresh) newWorkout();
     var w = S.live;
     view.innerHTML =
@@ -193,8 +195,11 @@
       '<div class="log-list" id="lifts">' + (w.exercises.length ? w.exercises.map(liftCard).join('') : '<div class="empty"><h3>No exercises yet</h3><p>Add your first exercise to start logging sets.</p></div>') + '</div>' +
       '<button type="button" class="btn add-lift" data-act="add-ex" style="margin-top:18px">' + icon('plus') + ' Add exercise</button>' +
       '<div class="field" style="margin-top:24px"><label for="w-notes">Notes</label><textarea id="w-notes" placeholder="How did it feel?">' + esc(w.notes) + '</textarea></div>' +
-      '<div class="log-actions"><button type="button" class="btn btn-go btn-lg" data-act="finish">' + icon('check') + ' Finish workout</button>' +
-      '<button type="button" class="btn btn-danger btn-lg" data-act="discard">' + icon('trash') + ' Discard</button></div>';
+      (editing
+        ? '<div class="log-actions"><button type="button" class="btn btn-go btn-lg" data-act="finish">' + icon('check') + ' Save changes</button>' +
+          '<button type="button" class="btn btn-lg" data-act="discard">Cancel editing</button></div>'
+        : '<div class="log-actions"><button type="button" class="btn btn-go btn-lg" data-act="finish">' + icon('check') + ' Finish workout</button>' +
+          '<button type="button" class="btn btn-danger btn-lg" data-act="discard">' + icon('trash') + ' Discard</button></div>');
     if (fresh) openPicker();
   }
 
@@ -251,12 +256,35 @@
       we.sets = we.sets.filter(function (s) { return s.done || s.weight != null || s.reps != null; });
     });
     w.exercises = w.exercises.filter(function (we) { return we.sets.length; });
+    var editing = w.editing;
+    delete w.editing;
+    S.pending.workouts = S.pending.workouts.filter(function (x) { return x.client_id !== w.client_id; });
     S.pending.workouts.push(w);
     S.live = null;
     return Promise.all([save('pending'), window.Store.del('live')]).then(function () {
-      toast('Workout saved on the phone. Sync at home to send it to your PC.');
-      location.hash = '#/';
+      toast(editing ? 'Changes saved on the phone. Sync at home to send them to your PC.' : 'Workout saved on the phone. Sync at home to send it to your PC.');
+      location.hash = editing ? '#/w/' + encodeURIComponent(w.client_id) : '#/';
     });
+  }
+
+  // Opens a finished workout in the logger. A PC workout is marked "edited" so the sync
+  // replaces it on the PC instead of adding a copy.
+  function editWorkout(cid) {
+    var w = workouts().find(function (x) { return x.client_id === cid; });
+    if (!w) return;
+    if (S.live && !(S.live.editing && S.live.client_id === cid)) {
+      toast(S.live.editing ? 'You’re already editing another workout. Save or cancel it first.' : 'Finish or discard the workout in progress first.', 'error');
+      location.hash = '#/log';
+      return;
+    }
+    if (!S.live) {
+      var fromPc = !w.pending || w.edited;
+      S.live = { client_id: w.client_id, name: w.name, date: F.dayInput(w.started_at), notes: w.notes || '', editing: true,
+        exercises: JSON.parse(JSON.stringify(w.exercises)) };
+      if (fromPc) { S.live.edited = true; if (w.id) S.live.id = w.id; }
+      save('live');
+    }
+    location.hash = '#/log';
   }
 
   /* ----- exercise picker ----- */
@@ -320,21 +348,40 @@
   /* ----- history ----- */
 
   var histFilter = 'all';
+  var histQuery = '';
   function renderHistory() {
     setNav('history');
     if (!S.snap) { view.innerHTML = needsSync(); return; }
-    var items = [];
-    if (histFilter !== 'sports') workouts().forEach(function (w) { items.push({ kind: 'w', day: w.started_at, w: w }); });
-    if (histFilter !== 'workouts') sports().forEach(function (s) { items.push({ kind: 's', day: s.played_on, s: s }); });
-    items.sort(function (a, b) { return a.day < b.day ? 1 : -1; });
     var tabs = [['all', 'All'], ['workouts', 'Workouts'], ['sports', 'Sports']].map(function (t) {
       return '<a href="#/history" data-filter="' + t[0] + '" aria-current="' + (histFilter === t[0]) + '">' + t[1] + '</a>';
     }).join('');
     view.innerHTML = '<div class="page-head"><div><h1>History</h1><p class="muted">Last year from your PC, plus what you logged on the phone.</p></div></div>' +
-      '<div class="history-list"><nav class="chart-tabs history-filter">' + tabs + '</nav><ul class="rows">' + items.map(function (it) {
+      '<input id="hist-q" type="search" enterkeyhint="search" placeholder="Search by workout, exercise or notes" autocomplete="off" value="' + esc(histQuery) + '">' +
+      '<div class="history-list"><nav class="chart-tabs history-filter">' + tabs + '</nav><div id="hist-rows">' + historyRows() + '</div></div>';
+    document.getElementById('hist-q').addEventListener('input', function (e) {
+      histQuery = e.target.value;
+      document.getElementById('hist-rows').innerHTML = historyRows();
+    });
+  }
+
+  // Every search word must appear somewhere in the workout's name, exercises or notes
+  // (for sports: the sport or notes), with the same forgiving matching as exercise search.
+  function historyRows() {
+    var words = stems(histQuery);
+    var hit = function (text) { var t = squeeze(text); return words.every(function (w) { return t.indexOf(w) >= 0; }); };
+    var items = [];
+    if (histFilter !== 'sports') workouts().forEach(function (w) {
+      var text = [w.name, w.notes].concat(w.exercises.map(function (we) { return (exById.get(we.exercise_id) || {}).name; })).join(' ');
+      if (hit(text)) items.push({ kind: 'w', day: w.started_at, w: w });
+    });
+    if (histFilter !== 'workouts') sports().forEach(function (s) {
+      if (hit(SP.SPORTS[s.sport].label + ' ' + (s.notes || ''))) items.push({ kind: 's', day: s.played_on, s: s });
+    });
+    items.sort(function (a, b) { return a.day < b.day ? 1 : -1; });
+    return '<ul class="rows">' + items.map(function (it) {
         var d = it.day;
         var when = '<span class="when">' + F.relDay(d) + '<small>' + (F.relDay(d) === F.date(d) ? F.weekday(d).slice(0, 3) : F.date(d)) + '</small></span>';
-        var badge = (it.w || it.s).pending ? ' <span class="chip">Not synced</span>' : '';
+        var badge = (it.w || it.s).pending ? ' <span class="chip">' + (it.w && it.w.edited ? 'Edited' : 'Not synced') + '</span>' : '';
         if (it.kind === 's') {
           return '<li><a class="row-link history-row" href="#/s/' + encodeURIComponent(it.s.client_id) + '">' + when +
             '<span class="what"><strong>' + esc(SP.SPORTS[it.s.sport].label) + badge + '</strong><p>' + esc(it.s.notes || 'Sports session') + '</p></span>' +
@@ -345,7 +392,7 @@
         return '<li><a class="row-link history-row" href="#/w/' + encodeURIComponent(it.w.client_id) + '">' + when +
           '<span class="what"><strong>' + esc(it.w.name) + badge + '</strong><p>' + esc(names || 'No exercises') + '</p></span>' +
           '<span class="row-figures"><span class="num">' + F.num(volumeOf(it.w)) + ' ' + unit() + '</span>' + sets + (sets === 1 ? ' set' : ' sets') + '</span></a></li>';
-      }).join('') + '</ul>' + (items.length ? '' : '<div class="empty"><p>Nothing logged yet.</p></div>') + '</div>';
+      }).join('') + '</ul>' + (items.length ? '' : '<div class="empty"><p>' + (words.length ? 'Nothing matches “' + esc(histQuery.trim()) + '”.' : 'Nothing logged yet.') + '</p></div>');
   }
 
   function renderWorkout(cid) {
@@ -353,7 +400,7 @@
     var w = workouts().find(function (x) { return x.client_id === cid; });
     if (!w) { location.hash = '#/history'; return; }
     view.innerHTML = '<a class="back-btn" href="#/history">' + icon('left') + ' History</a>' +
-      '<div class="page-head"><div><h1>' + esc(w.name) + '</h1><p class="muted">' + F.weekday(w.started_at) + ' ' + F.date(w.started_at, { year: 'numeric' }) + (w.pending ? ' · not synced yet' : '') + '</p></div></div>' +
+      '<div class="page-head"><div><h1>' + esc(w.name) + '</h1><p class="muted">' + F.weekday(w.started_at) + ' ' + F.date(w.started_at, { year: 'numeric' }) + (w.pending ? (w.edited ? ' · edited, not synced yet' : ' · not synced yet') : '') + '</p></div></div>' +
       '<div class="detail-figures"><div><b class="num">' + w.exercises.length + '</b><span>exercises</span></div><div><b class="num">' + setCount(w) + '</b><span>working sets</span></div><div><b class="num">' + F.num(volumeOf(w)) + ' ' + unit() + '</b><span>volume</span></div></div>' +
       (w.notes ? '<p class="notes" style="margin-bottom:24px">' + esc(w.notes) + '</p>' : '') +
       '<div class="detail-lifts">' + w.exercises.map(function (we) {
@@ -364,7 +411,9 @@
             return '<tr class="' + (s.is_warmup ? 'warm' : '') + '"><td class="num">' + (s.is_warmup ? 'W' : ++n) + '</td><td class="num">' + (s.weight == null ? 'Bodyweight' : U.round1(s.weight) + ' ' + s.unit) + '</td><td class="num">' + (s.reps == null ? '—' : s.reps) + '</td></tr>';
           }).join('') + '</tbody></table></section>';
       }).join('') + '</div>' +
-      (w.pending ? '<div class="log-actions"><button type="button" class="btn btn-danger" data-act="del-pending" data-kind="workouts" data-cid="' + esc(cid) + '">' + icon('trash') + ' Delete workout</button></div>' : '');
+      '<div class="log-actions"><button type="button" class="btn btn-go" data-act="edit-workout" data-cid="' + esc(cid) + '">' + icon('edit') + ' Edit workout</button>' +
+      (w.pending ? '<button type="button" class="btn btn-danger" data-act="del-pending" data-kind="workouts" data-cid="' + esc(cid) + '">' +
+        (w.edited ? 'Undo phone changes' : icon('trash') + ' Delete workout') + '</button>' : '') + '</div>';
   }
 
   function renderSportSession(cid) {
@@ -391,17 +440,34 @@
       (ex.steps.length ? '<section class="section"><h2 style="margin-bottom:12px">How to do it</h2><ol class="steps">' + ex.steps.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ol></section>' : '');
   }
 
+  var exFilter = { q: '', body_part: '', target: '', equipment: '' }; // kept while you open an exercise and come back
   function renderExercises() {
     setNav('exercises');
     if (!S.snap) { view.innerHTML = needsSync(); return; }
-    view.innerHTML = '<div class="page-head"><div><h1>Exercises</h1></div></div><input id="ex-q" type="search" enterkeyhint="search" placeholder="Search ' + S.snap.exercises.length.toLocaleString() + ' exercises" autocomplete="off"><ul class="picker-results m-ex-list" id="ex-list"></ul>';
+    var opts = function (key) { return Array.from(new Set(S.snap.exercises.map(function (e) { return e[key]; }))).filter(Boolean).sort(); };
+    var select = function (key, any) {
+      return '<select data-exf="' + key + '" aria-label="' + any + '"><option value="">' + any + '</option>' +
+        opts(key).map(function (v) { return '<option value="' + esc(v) + '"' + (exFilter[key] === v ? ' selected' : '') + '>' + esc(cap(v)) + '</option>'; }).join('') + '</select>';
+    };
+    view.innerHTML = '<div class="page-head"><div><h1>Exercises</h1></div></div>' +
+      '<input id="ex-q" type="search" enterkeyhint="search" placeholder="Search ' + S.snap.exercises.length.toLocaleString() + ' exercises" autocomplete="off" value="' + esc(exFilter.q) + '">' +
+      '<div class="m-ex-filters">' + select('body_part', 'Any body part') + select('target', 'Any target') + select('equipment', 'Any equipment') + '</div>' +
+      '<p class="muted small" id="ex-count"></p><ul class="picker-results m-ex-list" id="ex-list"></ul>';
     function search() {
-      var hits = S.snap.exercises.filter(function (e) { return matches(e, stems(document.getElementById('ex-q').value)); }).slice(0, 80);
-      document.getElementById('ex-list').innerHTML = hits.map(function (e) {
+      exFilter.q = document.getElementById('ex-q').value;
+      view.querySelectorAll('[data-exf]').forEach(function (sel) { exFilter[sel.dataset.exf] = sel.value; });
+      var words = stems(exFilter.q);
+      var all = S.snap.exercises.filter(function (e) {
+        return (!exFilter.body_part || e.body_part === exFilter.body_part) && (!exFilter.target || e.target === exFilter.target) &&
+          (!exFilter.equipment || e.equipment === exFilter.equipment) && matches(e, words);
+      });
+      document.getElementById('ex-count').textContent = all.length.toLocaleString() + (all.length === 1 ? ' exercise' : ' exercises') + (all.length > 80 ? ' · showing the first 80' : '');
+      document.getElementById('ex-list').innerHTML = all.slice(0, 80).map(function (e) {
         return '<li><a class="m-ex-row" href="#/ex/' + encodeURIComponent(e.id) + '">' + thumb(e.id) + '<span><strong>' + esc(e.name) + '</strong><span>' + esc(e.target) + ' · ' + esc(e.equipment) + '</span></span></a></li>';
-      }).join('');
+      }).join('') || '<li class="muted" style="padding:12px">Nothing matches.</li>';
     }
     document.getElementById('ex-q').addEventListener('input', search);
+    view.querySelectorAll('[data-exf]').forEach(function (sel) { sel.addEventListener('change', search); });
     search();
   }
 
@@ -439,7 +505,7 @@
         indexExercises();
         return Promise.all([save('snap'), save('pending'), save('lastSync')]).then(function () {
           var got = body.imported;
-          toast('Synced. Sent ' + got.workouts + ' workout(s) and ' + got.sports + ' sports session(s).');
+          toast('Synced. Sent ' + got.workouts + ' workout(s)' + (got.edited ? ', ' + got.edited + ' edit(s)' : '') + ' and ' + got.sports + ' sports session(s).');
           route();
           downloadMedia();
         });
@@ -519,13 +585,27 @@
     var act = b.dataset.act;
     if (act === 'sync') { sync(); return; }
     if (act === 'del-pending') {
-      window.confirmDialog({ title: 'Delete this?', message: 'It hasn’t been synced, so it’s only on this phone. This can’t be undone.' }).then(function (yes) {
+      var undo = b.dataset.kind === 'workouts' && (S.pending.workouts.find(function (x) { return x.client_id === b.dataset.cid; }) || {}).edited;
+      window.confirmDialog(undo
+        ? { title: 'Undo your changes?', message: 'The workout goes back to how it is on your PC.', confirmLabel: 'Undo changes' }
+        : { title: 'Delete this?', message: 'It hasn’t been synced, so it’s only on this phone. This can’t be undone.' }).then(function (yes) {
         if (!yes) return;
         S.pending[b.dataset.kind] = S.pending[b.dataset.kind].filter(function (x) { return x.client_id !== b.dataset.cid; });
-        save('pending').then(function () { toast('Deleted.'); location.hash = '#/history'; });
+        save('pending').then(function () {
+          toast(undo ? 'Changes undone.' : 'Deleted.');
+          location.hash = undo ? '#/w/' + encodeURIComponent(b.dataset.cid) : '#/history';
+          if (undo) route();
+        });
       });
       return;
     }
+    if (act === 'discard' && S.live && S.live.editing) {
+      var back = S.live.client_id;
+      S.live = null;
+      window.Store.del('live').then(function () { toast('Changes discarded.'); location.hash = '#/w/' + encodeURIComponent(back); });
+      return;
+    }
+    if (act === 'edit-workout') { editWorkout(b.dataset.cid); return; }
     if (act === 'discard' && S.live) {
       window.confirmDialog({ title: 'Discard this workout?', message: 'Everything logged in it is deleted. This can’t be undone.', confirmLabel: 'Discard' }).then(function (yes) {
         if (!yes) return;

@@ -696,15 +696,7 @@ function createRepo(db) {
     return tx(() => {
       let addedW = 0;
       let addedS = 0;
-      for (const w of workouts) {
-        const cid = clientId(w, 'A workout');
-        if (get('SELECT 1 FROM workouts WHERE client_id = ?', cid)) continue;
-        const day = dayIso(w.date);
-        if (!day) throw new Error('A workout from the phone has no valid date');
-        const id = Number(
-          run('INSERT INTO workouts (name, notes, started_at, client_id) VALUES (?, ?, ?, ?)',
-            String(w.name || '').trim() || 'Workout', String(w.notes || '').trim() || null, day, cid).lastInsertRowid,
-        );
+      const fillWorkout = (id, w) => {
         for (const we of w.exercises || []) {
           const exId = String(we.exercise_id || '');
           if (!get('SELECT 1 FROM exercises WHERE id = ?', exId)) throw new Error(`Unknown exercise ${exId}`);
@@ -721,6 +713,28 @@ function createRepo(db) {
           }
         }
         finishWorkout(id); // same rules as the PC: auto-tick sets with reps, default reps, drop empty sets
+      };
+      let editedW = 0;
+      for (const w of workouts) {
+        const cid = clientId(w, 'A workout');
+        const day = dayIso(w.date);
+        if (!day) throw new Error('A workout from the phone has no valid date');
+        const name = String(w.name || '').trim() || 'Workout';
+        const notes = String(w.notes || '').trim() || null;
+        // An edit made on the phone replaces the workout (PC workouts have client_id "pc-<id>").
+        // Replaying the same edit gives the same result, so a repeated sync is harmless.
+        const pcId = /^pc-(\d+)$/.exec(cid);
+        const existing = get('SELECT id FROM workouts WHERE client_id = ?', cid) || (pcId && get('SELECT id FROM workouts WHERE id = ? AND client_id IS NULL', Number(pcId[1])));
+        if (existing && !w.edited) continue;
+        if (existing) {
+          run('UPDATE workouts SET name = ?, notes = ?, started_at = ? WHERE id = ?', name, notes, day, existing.id);
+          run('DELETE FROM workout_exercises WHERE workout_id = ?', existing.id);
+          fillWorkout(existing.id, w);
+          editedW++;
+          continue;
+        }
+        const id = Number(run('INSERT INTO workouts (name, notes, started_at, client_id) VALUES (?, ?, ?, ?)', name, notes, day, cid).lastInsertRowid);
+        fillWorkout(id, w);
         addedW++;
       }
       for (const s of sports) {
@@ -730,7 +744,7 @@ function createRepo(db) {
         run('UPDATE sport_sessions SET client_id = ? WHERE id = ?', cid, sid);
         addedS++;
       }
-      return { workouts: addedW, sports: addedS };
+      return { workouts: addedW, edited: editedW, sports: addedS };
     });
   }
 

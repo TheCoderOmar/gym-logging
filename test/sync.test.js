@@ -31,7 +31,7 @@ const payload = () => ({
 test('importFromPhone adds finished workouts with their sets, and sports sessions', () => {
   const repo = freshDb();
   const res = repo.importFromPhone(payload());
-  assert.deepEqual(res, { workouts: 1, sports: 1 });
+  assert.deepEqual(res, { workouts: 1, edited: 0, sports: 1 });
   const [row] = repo.listHistory({ kind: 'workout' }).rows;
   const w = repo.getWorkout(row.id);
   assert.equal(w.name, 'Phone push');
@@ -50,7 +50,7 @@ test('importFromPhone adds finished workouts with their sets, and sports session
 test('importFromPhone is idempotent: the same payload twice adds nothing the second time', () => {
   const repo = freshDb();
   repo.importFromPhone(payload());
-  assert.deepEqual(repo.importFromPhone(payload()), { workouts: 0, sports: 0 });
+  assert.deepEqual(repo.importFromPhone(payload()), { workouts: 0, edited: 0, sports: 0 });
   assert.equal(repo.listHistory().total, 2);
 });
 
@@ -81,4 +81,33 @@ test('snapshotForPhone has everything the phone needs to work offline', () => {
   assert.equal(snap.sports[0].client_id, 's-2222');
   assert.equal(snap.settings.display_unit, 'kg');
   assert.ok(Array.isArray(snap.routines));
+});
+
+test('importFromPhone applies an edit made on the phone: replaces the workout, repeatably', () => {
+  const repo = freshDb();
+  repo.importFromPhone(payload());
+  const edit = { client_id: 'w-1111', edited: true, name: 'Push (fixed)', date: '2026-10-15', notes: '',
+    exercises: [{ exercise_id: '0002', sets: [{ weight: 120, unit: 'kg', reps: 3, done: 1 }] }] };
+  assert.deepEqual(repo.importFromPhone({ workouts: [edit] }), { workouts: 0, edited: 1, sports: 0 });
+  assert.deepEqual(repo.importFromPhone({ workouts: [edit] }), { workouts: 0, edited: 1, sports: 0 });
+  const rows = repo.listHistory({ kind: 'workout' }).rows;
+  assert.equal(rows.length, 1);
+  const w = repo.getWorkout(rows[0].id);
+  assert.equal(w.name, 'Push (fixed)');
+  assert.equal(w.notes, null);
+  assert.equal(new Date(w.started_at).getDate(), 15);
+  assert.deepEqual(w.exercises.map((e) => [e.exercise_id, e.sets.map((s) => [s.weight, s.reps])]), [['0002', [[120, 3]]]]);
+});
+
+test('importFromPhone edits a workout logged on the PC by its "pc-<id>" client id', () => {
+  const repo = freshDb();
+  repo.importFromPhone(payload());
+  repo.db.prepare('UPDATE workouts SET client_id = NULL').run(); // as if it was logged on the PC
+  const snapW = repo.snapshotForPhone().workouts[0];
+  assert.match(snapW.client_id, /^pc-\d+$/);
+  const res = repo.importFromPhone({ workouts: [{ ...snapW, edited: true, date: '2026-10-14', name: 'Renamed' }] });
+  assert.equal(res.edited, 1);
+  const rows = repo.listHistory({ kind: 'workout' }).rows;
+  assert.equal(rows.length, 1);
+  assert.equal(repo.getWorkout(rows[0].id).name, 'Renamed');
 });
