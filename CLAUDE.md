@@ -15,6 +15,7 @@ npm run seed       # (re)load data/exercises.json + images/ + videos/ into the D
 npm test           # node:test suite (test/*.test.js) — keep it green
 ```
 
+- Desktop shortcut "Gym Log" → `C:\mainPC\Launchers\Gym Log.bat` (outside the repo, with the YT Downloader and Job Applications launchers and their `.ico` files): starts `npm.cmd start` minimized with `HOST=0.0.0.0` (so the phone can sync) if :3000 isn't listening, then opens the browser. The port variable is `APP_PORT`, never `PORT`, which the started server would inherit.
 - Node **22.13+** — uses the built-in `node:sqlite` (`DatabaseSync`). Do **not** reintroduce `better-sqlite3`: its prebuilt binary segfaulted on this machine.
 - Env vars: `PORT` (default 3000), `HOST` (default `127.0.0.1`; `0.0.0.0` for phone access), `GYM_DB` (path to a different DB file — use this for demo/test data, never pollute the real DB).
 - npm scripts pass `--disable-warning=ExperimentalWarning` because `node:sqlite` is flagged experimental.
