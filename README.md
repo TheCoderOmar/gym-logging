@@ -4,6 +4,8 @@
 
 Local gym tracker with a muscle-recovery heat map, a fast workout logger, progress charts and an offline iPhone app that syncs with it.
 
+📱 **[Install it on your iPhone](docs/iphone-install.md)** — step-by-step guide, about 10 minutes.
+
 ## Run
 
 ```
@@ -14,7 +16,7 @@ npm start      # http://localhost:3000
 
 `npm start` seeds automatically if the database is empty. Needs Node 22.13+ (uses the built-in `node:sqlite`).
 
-To log from your phone on the same Wi-Fi, start it with `HOST=0.0.0.0 npm start` (PowerShell: `$env:HOST='0.0.0.0'; npm start`) and open `http://<your-PC-IP>:3000`.
+To use the full app from your phone's browser on the same Wi-Fi, start it with `HOST=0.0.0.0 npm start` (PowerShell: `$env:HOST='0.0.0.0'; npm.cmd start`) and open `http://<your-PC-IP>:3000`. For the offline app at the gym, see the iPhone app below.
 
 ## Pages
 
@@ -30,8 +32,13 @@ To log from your phone on the same Wi-Fi, start it with `HOST=0.0.0.0 npm start`
 
 The same server also serves an offline home-screen app at `/m`: log workouts and sports at the gym with no connection, see the recovery map, muscle heads, sets per muscle and history from the last sync, and tap **Sync** on home Wi-Fi to send everything to the PC.
 
-- iOS only installs offline web apps over https: run `node scripts/make-cert.js` once (makes a local CA in `certs/`, gitignored), install `http://<PC-IP>:3000/m/ca.crt` on the iPhone and trust it, then start with `HOST=0.0.0.0 npm start`.
-- Open `https://<PC-IP>:3443/m/` in Safari and choose Share › **Add to Home Screen**.
+Setting it up, in short:
+
+1. On the PC: `node scripts/make-cert.js` once, then start with `HOST=0.0.0.0` (the desktop shortcut does this).
+2. On the iPhone, in Safari: download `http://<PC-IP>:3000/m/ca.crt`, install it in Settings, and turn it on under **General › About › Certificate Trust Settings**.
+3. Open `https://<PC-IP>:3443/m/` and choose Share › **Add to Home Screen** (with **Open as Web App** on).
+
+**[Full guide with troubleshooting →](docs/iphone-install.md)**
 
 ## Data
 
