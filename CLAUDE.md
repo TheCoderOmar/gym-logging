@@ -15,6 +15,7 @@ npm run seed       # (re)load data/exercises.json + images/ + videos/ into the D
 npm test           # node:test suite (test/*.test.js) — keep it green
 ```
 
+- Desktop shortcut "Gym Log" → `C:\mainPC\Launchers\Gym Log.bat` (outside the repo, with the YT Downloader and Job Applications launchers and their `.ico` files): starts `npm.cmd start` minimized with `HOST=0.0.0.0` (so the phone can sync) if :3000 isn't listening, then opens the browser. The port variable is `APP_PORT`, never `PORT`, which the started server would inherit.
 - Node **22.13+** — uses the built-in `node:sqlite` (`DatabaseSync`). Do **not** reintroduce `better-sqlite3`: its prebuilt binary segfaulted on this machine.
 - Env vars: `PORT` (default 3000), `HOST` (default `127.0.0.1`; `0.0.0.0` for phone access), `GYM_DB` (path to a different DB file — use this for demo/test data, never pollute the real DB).
 - npm scripts pass `--disable-warning=ExperimentalWarning` because `node:sqlite` is flagged experimental.
@@ -62,6 +63,8 @@ Stats only count **working sets**: `done = 1 AND is_warmup = 0 AND reps > 0` (`W
 - **Sports vs sets wording:** sport rows carry `sets` only as map weight (30 min = 1); anything shown to Omar says time played (`activityText`: "Football 3 h", "4 sets + Football 3 h").
 - **Muscle heads (Home):** clicking chest, shoulders, biceps, triceps, forearms, abs, quads or lats opens a popup (`GET /muscles/:region` fragment) with a close-up split into heads, coloured exactly like the map. Heads appear **only** there, never on the main figure (Omar's request). The dataset has no head data: rules guess from the exercise name (main head = the region score, "some" = 1), heads are capped at the exercise's region score, and a region scored 0 contributes nothing. Editable under "Heads" on each exercise page.
 - **Training log (Home):** calendar year Jan–Dec, **weeks start Saturday**, two views — exercise-count levels (1–3, 4, 5, 6, 7+) and an emoji per day for the most-trained area. Legend items are filters. Year paging (first logged year … +5) swaps the partial in place via `GET /training-log?year=`.
+- **Exercise search is forgiving** (PC `searchStems` + `SQUEEZED_NAME` in db.js, same logic in `public/m/app.js`): case, spaces/hyphens/brackets/apostrophes and a plural "s" are ignored ("Pull ups" and "pullup" find "pull-up"). Search inputs use `enterkeyhint="search"`; Enter runs the search and blurs so the iPhone keyboard closes.
+- **Picker dialog has an explicit height** (`dvh`, follows the iPhone keyboard) and `.picker-results { flex: 1 1 auto; min-height: 0 }` — without it iPhone Safari collapsed the results list to nothing.
 - **Exercise library:** live search/filters and a clickable body figure (front/back toggle). Multiple muscles = exercises that work **all** of them (score > 0), ranked by combined score; falls back to closest matches with `partial`.
 - **Dates:** build day sequences by offset at **noon** (`new Date(y, 0, 1 + i, 12)`) — Egypt's DST changes at local midnight, stepping midnights drops days.
 - **Workouts are date-only** (Omar's request): no clock, start/finish times or duration anywhere. `started_at` holds the chosen day at local noon (`fmt.dayIso`); the logger has a date field (defaults to today, no future dates). `finished_at` is only the "finished" flag. Older workouts still have real times stored — never display them.
@@ -79,6 +82,20 @@ Stats only count **working sets**: `done = 1 AND is_warmup = 0 AND reps > 0` (`W
 - Messages: redirect with `?msg=…` (`&tone=error` for errors) → shown as top-right stacking toasts (15 s, pause on hover). In JS use `window.toast(msg, { tone })`.
 - Destructive actions: add `data-confirm` (+ `data-confirm-title`, `data-confirm-label`) to the form, or `await confirmDialog({...})` in JS. Never `window.confirm`.
 - Copy: sentence case, plain verbs, buttons say what happens ("Delete routine", "Finish workout").
+
+## iPhone app (`/m`, branch `iphone-offline`, Oct 2026)
+
+Offline home-screen web app: logs workouts/sports at the gym with no connection, shows the map/heads/sets-per-muscle/history from a local snapshot, and **Sync** (home Wi-Fi, PC app running) sends phone records to the PC and pulls a fresh snapshot.
+- Static app in `public/m/` (`index.html`, `app.js` hash-routed screens, `store.js` IndexedDB kv: `snap`/`pending`/`live`/`lastSync`, `sw.js` service worker, `m.css`, manifest + icons). `src/routes/mobile.js` serves `src/lib/*` wrapped for `public/m/require.js` — the phone runs the **same** map/heads/sets/sports code (test in `test/mobile.test.js` checks the SVG matches).
+- `POST /api/sync` → `repo.importFromPhone` (idempotent by `client_id`, all-or-nothing, finished via `finishWorkout`) + `repo.snapshotForPhone`. Finished workouts can be edited on the phone ("Edit workout" reopens the logger): the edit is sent with `edited: true` and replaces the PC workout (PC workouts have client_id `pc-<id>`; phone wins over PC changes made meanwhile). History has a search box (name, exercises, notes).
+- iOS needs https for offline web apps: `node scripts/make-cert.js` → gitignored `certs/` (local CA + 397-day server cert); server also listens on `HTTPS_PORT` (3443) when certs exist; phone needs `HOST=0.0.0.0`. CA download: `/m/ca.crt`. Re-run make-cert if the PC's IP changes.
+- Compressed animations: `python scripts/make-mobile-media.py` → gitignored `mobile-media/` (160 px WebP, ~57 MB), downloaded by the phone after a sync.
+- Test on desktop at `http://localhost:<port>/m/` (localhost counts as secure, so the service worker runs); offline via CDP `Network.emulateNetworkConditions` (also on the service-worker target).
+- **Omar's setup:** PC `DESKTOP-HID262V` at `192.168.1.2`. Start for the phone with `$env:HOST="0.0.0.0"; npm.cmd start` (PowerShell blocks `npm.ps1` — use `npm.cmd`, or `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`); allow Node on Private networks in the firewall. CA via `http://192.168.1.2:3000/m/ca.crt` → Settings → Profile → Install → General → About → Certificate Trust Settings → "Gym Log local".
+- **Sync says "Can't reach your PC" instantly** (Oct 2026): check, in order, (1) the server was started with `HOST=0.0.0.0`: plain `npm start` listens on 127.0.0.1 only; (2) the iPhone still trusts the CA: a TLS log showed `alert certificate unknown` from the phone (192.168.1.46), fixed by removing the old "Gym Log local" profile, reinstalling `/m/ca.crt` and turning it on in Certificate Trust Settings. The app shows that message for any fetch `TypeError`, so a handshake failure looks like no network. To debug, temporarily log `tlsClientError` on the https server and non-local requests in `server.js`. A failed import now comes back as JSON `{ error }` (shown as "Sync failed: …").
+- **Install from `https://192.168.1.2:3443/m/` only**, Share → Add to Home Screen with **"Open as Web App" on**. An icon added from a PC page (`/workouts/...`) opens in Safari, not as an app. In Safari over https Omar sees the PC app (works only on home Wi-Fi) — at the gym he must use the icon.
+- **Updates reach the phone** via the service worker's background refresh: after a code change, restart the PC app, open the phone app on home Wi-Fi, close it fully, reopen. Bump `SHELL` in `sw.js` if a change must replace cached files at once.
+- Omar confirmed it works offline on his iPhone (Oct 2026). Branch `iphone-offline` is **not merged** — wait for his go-ahead.
 
 ## Liftmanual import (Oct 2026)
 
