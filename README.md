@@ -1,6 +1,8 @@
 # Gym Log
 
-A personal, local-only gym tracker built on the exercise dataset in `data/`.
+<p align="center"><img src="docs/demo.gif" alt="Gym Log: recovery heat map, exercise library, workout, progress and history" width="900"></p>
+
+Local gym tracker with a muscle-recovery heat map, a fast workout logger, progress charts and an offline iPhone app (branch `iphone-offline`).
 
 ## Run
 
@@ -39,3 +41,7 @@ Each set is stored in the unit it was logged in (kg or lb). Charts, PRs and volu
 ```
 npm test
 ```
+
+## License
+
+[MIT](LICENSE). The exercise data, images and animations come from their own sources and keep their own terms.
