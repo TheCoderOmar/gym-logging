@@ -2,6 +2,18 @@
 
 All notable changes to Gym Log.
 
+## [1.1.0] - 2026-11-03
+
+The iPhone app joins the main app: one Gym Log for laptop and phone.
+
+- Offline home-screen iPhone app at `/m`: log workouts and sports with no connection, recovery map, muscle heads, sets per muscle and history from a local snapshot
+- Sync with the PC over home Wi-Fi (`/api/sync`), all-or-nothing and safe to repeat
+- Edit finished workouts on the phone; history search
+- Local https for the phone (`scripts/make-cert.js`)
+- Forgiving exercise search on PC and phone; the Search key closes the keyboard
+- Exercise picker list no longer collapses in iPhone Safari
+- Sync errors come back as readable messages
+
 ## [1.0.0] - 2026-11-03
 
 First release. Everything built so far, oldest first:

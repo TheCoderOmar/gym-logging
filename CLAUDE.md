@@ -83,7 +83,7 @@ Stats only count **working sets**: `done = 1 AND is_warmup = 0 AND reps > 0` (`W
 - Destructive actions: add `data-confirm` (+ `data-confirm-title`, `data-confirm-label`) to the form, or `await confirmDialog({...})` in JS. Never `window.confirm`.
 - Copy: sentence case, plain verbs, buttons say what happens ("Delete routine", "Finish workout").
 
-## iPhone app (`/m`, branch `iphone-offline`, Oct 2026)
+## iPhone app (`/m`, Oct 2026)
 
 Offline home-screen web app: logs workouts/sports at the gym with no connection, shows the map/heads/sets-per-muscle/history from a local snapshot, and **Sync** (home Wi-Fi, PC app running) sends phone records to the PC and pulls a fresh snapshot.
 - Static app in `public/m/` (`index.html`, `app.js` hash-routed screens, `store.js` IndexedDB kv: `snap`/`pending`/`live`/`lastSync`, `sw.js` service worker, `m.css`, manifest + icons). `src/routes/mobile.js` serves `src/lib/*` wrapped for `public/m/require.js` — the phone runs the **same** map/heads/sets/sports code (test in `test/mobile.test.js` checks the SVG matches).
@@ -95,7 +95,7 @@ Offline home-screen web app: logs workouts/sports at the gym with no connection,
 - **Sync says "Can't reach your PC" instantly** (Oct 2026): check, in order, (1) the server was started with `HOST=0.0.0.0`: plain `npm start` listens on 127.0.0.1 only; (2) the iPhone still trusts the CA: a TLS log showed `alert certificate unknown` from the phone (192.168.1.46), fixed by removing the old "Gym Log local" profile, reinstalling `/m/ca.crt` and turning it on in Certificate Trust Settings. The app shows that message for any fetch `TypeError`, so a handshake failure looks like no network. To debug, temporarily log `tlsClientError` on the https server and non-local requests in `server.js`. A failed import now comes back as JSON `{ error }` (shown as "Sync failed: …").
 - **Install from `https://192.168.1.2:3443/m/` only**, Share → Add to Home Screen with **"Open as Web App" on**. An icon added from a PC page (`/workouts/...`) opens in Safari, not as an app. In Safari over https Omar sees the PC app (works only on home Wi-Fi) — at the gym he must use the icon.
 - **Updates reach the phone** via the service worker's background refresh: after a code change, restart the PC app, open the phone app on home Wi-Fi, close it fully, reopen. Bump `SHELL` in `sw.js` if a change must replace cached files at once.
-- Omar confirmed it works offline on his iPhone (Oct 2026). Branch `iphone-offline` is **not merged** — wait for his go-ahead.
+- Omar confirmed it works offline on his iPhone (Oct 2026). Merged into `main` on 2026-11-03 at his request (one app for laptop and phone; the `iphone-offline` branch is gone).
 
 ## Liftmanual import (Oct 2026)
 
